@@ -19,4 +19,5 @@ twilight-http = "0.15"
 twilight-model = "0.15"
 twilight-standby = "0.15"
 twilight-cache-inmemory = "0.15"
+twilight-util = { version = "0.15", features=["builder"] }
 dotenv = "0.15.0"
