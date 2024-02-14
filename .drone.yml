@@ -1,0 +1,18 @@
+kind: pipeline
+type: docker
+name: default
+
+steps:
+  - name: pre-commit
+    image: iamthefij/drone-pre-commit:latest
+    commands:
+      - apt-get update && apt-get install -y cmake
+      - curl https://sh.rustup.rs -sSf | bash -s -- -y
+      - export PATH="/root/.cargo/bin:$${PATH}"
+      - pre-commit run --all-files
+  - name: test
+    image: rust:latest
+    commands:
+      - apt-get update && apt-get install -y cmake
+      - cargo build --verbose --all
+      - cargo test --verbose --all

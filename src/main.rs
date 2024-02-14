@@ -192,7 +192,7 @@ async fn play(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + S
     let mut src = YoutubeDl::new(reqwest::Client::new(), url);
     if let Ok(metadata) = src.aux_metadata().await {
         info!("metadata: {:?}", metadata);
-        
+
         let content = format!(
             "Playing **{:?}** by **{:?}**",
             metadata.title.as_ref().unwrap_or(&"<UNKNOWN>".to_string()),
