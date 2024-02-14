@@ -7,7 +7,7 @@ license = "MIT"
 
 [dependencies]
 symphonia = { version = "0.5.2", features=["all"] }
-songbird = { version = "0.4.0", features = ["driver", "gateway", "twilight", "rustls"] }
+songbird = { version = "0.4.0", features = ["driver", "gateway", "twilight", "rustls", "builtin-queue"] }
 tokio = { features = ["macros", "rt-multi-thread", "signal", "sync"], version = "1" }
 regex = { version = "1", features = ["unicode-case"] }
 futures = "0.3"
