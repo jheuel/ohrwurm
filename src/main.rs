@@ -1,13 +1,23 @@
 use dotenv::dotenv;
 use futures::StreamExt;
+use serde_json::Value;
 use songbird::{
     input::{Compose, YoutubeDl},
     shards::TwilightMap,
+    typemap::TypeMapKey,
     Songbird,
 };
 use std::{
-    env, error::Error, future::Future, num::NonZeroU64, ops::Sub, sync::Arc, time::Duration,
+    env,
+    error::Error,
+    future::Future,
+    io::{BufRead, BufReader},
+    num::NonZeroU64,
+    ops::Sub,
+    sync::Arc,
+    time::Duration,
 };
+use tokio::process::Command;
 use tracing::debug;
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::{
@@ -30,11 +40,21 @@ struct StateRef {
     standby: Standby,
 }
 
+struct Metadata {
+    title: Option<String>,
+    artist: Option<String>,
+}
+struct MetadataMap;
+impl TypeMapKey for MetadataMap {
+    type Value = Metadata;
+}
+
 enum ChatCommand {
     Play(Message, String),
     Stop(Message),
     Leave(Message),
     Join(Message),
+    Queue(Message),
     NotImplemented,
 }
 
@@ -52,6 +72,7 @@ fn parse_command(event: Event) -> Option<ChatCommand> {
                 ["!stop"] | ["!stop", _] => Some(ChatCommand::Stop(msg_create.0)),
                 ["!leave"] | ["!leave", _] => Some(ChatCommand::Leave(msg_create.0)),
                 ["!join"] | ["!join", _] => Some(ChatCommand::Join(msg_create.0)),
+                ["!queue"] | ["!queue", _] => Some(ChatCommand::Queue(msg_create.0)),
                 _ => Some(ChatCommand::NotImplemented),
             }
         }
@@ -153,6 +174,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             Some(ChatCommand::Stop(msg)) => spawn(stop(msg, Arc::clone(&state))),
             Some(ChatCommand::Leave(msg)) => spawn(leave(msg, Arc::clone(&state))),
             Some(ChatCommand::Join(msg)) => spawn(join(msg, Arc::clone(&state))),
+            Some(ChatCommand::Queue(msg)) => spawn(queue(msg, Arc::clone(&state))),
             _ => {}
         }
     }
@@ -175,6 +197,12 @@ async fn join(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + S
         .join(guild_id, channel_id)
         .await
         .map_err(|e| format!("Could not join voice channel: {:?}", e))?;
+
+    // signal that we are not listening
+    if let Some(call_lock) = state.songbird.get(guild_id) {
+        let mut call = call_lock.lock().await;
+        call.deafen(true).await?;
+    }
     Ok(())
 }
 
@@ -186,6 +214,65 @@ async fn leave(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + 
     );
     let guild_id = msg.guild_id.unwrap();
     state.songbird.leave(guild_id).await?;
+    Ok(())
+}
+
+async fn get_playlist_urls(
+    url: String,
+) -> Result<Vec<String>, Box<dyn Error + Send + Sync + 'static>> {
+    let output = Command::new("yt-dlp")
+        .args(vec![&url, "--flat-playlist", "-j"])
+        .output()
+        .await?;
+
+    let reader = BufReader::new(output.stdout.as_slice());
+    let urls = reader
+        .lines()
+        .flatten()
+        .map(|line| {
+            let entry: Value = serde_json::from_str(&line).unwrap();
+            entry
+                .get("webpage_url")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+
+    Ok(urls)
+}
+
+async fn queue(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    tracing::debug!(
+        "queue command in channel {} by {}",
+        msg.channel_id,
+        msg.author.name
+    );
+    let guild_id = msg.guild_id.unwrap();
+
+    if let Some(call_lock) = state.songbird.get(guild_id) {
+        let call = call_lock.lock().await;
+        let queue = call.queue().current_queue();
+        let mut message = String::new();
+        message.push_str("Currently playing:\n");
+        for track in queue {
+            let map = track.typemap().read().await;
+            let metadata = map.get::<MetadataMap>().unwrap();
+            message.push_str(
+                format!(
+                    "* {}\n",
+                    metadata.title.clone().unwrap_or("Unknown".to_string()),
+                )
+                .as_str(),
+            );
+        }
+        state
+            .http
+            .create_message(msg.channel_id)
+            .content(&message)?
+            .await?;
+    }
     Ok(())
 }
 
@@ -204,39 +291,42 @@ async fn play(
 
     let guild_id = msg.guild_id.unwrap();
 
-    let mut src = YoutubeDl::new(reqwest::Client::new(), query);
-    if let Ok(metadata) = src.aux_metadata().await {
-        debug!("metadata: {:?}", metadata);
-
-        state
-            .http
-            .create_message(msg.channel_id)
-            .content(&format!(
-                "Playing **{:?}** by **{:?}**",
-                metadata.title.as_ref().unwrap_or(&"<UNKNOWN>".to_string()),
-                metadata.artist.as_ref().unwrap_or(&"<UNKNOWN>".to_string()),
-            ))?
-            .await?;
-
-        if let Some(call_lock) = state.songbird.get(guild_id) {
-            let mut call = call_lock.lock().await;
-            let _handle = call.enqueue_with_preload(
-                src.into(),
-                metadata.duration.map(|duration| -> Duration {
-                    if duration.as_secs() > 5 {
-                        duration.sub(Duration::from_secs(5))
-                    } else {
-                        duration
-                    }
-                }),
-            );
-        }
+    let urls = if query.contains("list=") {
+        get_playlist_urls(query).await?
     } else {
-        state
-            .http
-            .create_message(msg.channel_id)
-            .content("Didn't find any results")?
-            .await?;
+        vec![query]
+    };
+
+    for url in urls {
+        let mut src = YoutubeDl::new(reqwest::Client::new(), url.to_string());
+        if let Ok(metadata) = src.aux_metadata().await {
+            debug!("metadata: {:?}", metadata);
+
+            if let Some(call_lock) = state.songbird.get(guild_id) {
+                let mut call = call_lock.lock().await;
+                let handle = call.enqueue_with_preload(
+                    src.into(),
+                    metadata.duration.map(|duration| -> Duration {
+                        if duration.as_secs() > 5 {
+                            duration.sub(Duration::from_secs(5))
+                        } else {
+                            duration
+                        }
+                    }),
+                );
+                let mut x = handle.typemap().write().await;
+                x.insert::<MetadataMap>(Metadata {
+                    title: metadata.title,
+                    artist: metadata.artist,
+                });
+            }
+        } else {
+            state
+                .http
+                .create_message(msg.channel_id)
+                .content("Cannot find any results")?
+                .await?;
+        }
     }
 
     Ok(())

@@ -404,6 +404,7 @@ dependencies = [
  "futures",
  "regex",
  "reqwest",
+ "serde_json",
  "songbird",
  "symphonia",
  "tokio",
