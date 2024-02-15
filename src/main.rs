@@ -30,6 +30,35 @@ struct StateRef {
     standby: Standby,
 }
 
+enum ChatCommand {
+    Play(Message, String),
+    Stop(Message),
+    Leave(Message),
+    Join(Message),
+    NotImplemented,
+}
+
+fn parse_command(event: Event) -> Option<ChatCommand> {
+    match event {
+        Event::MessageCreate(msg_create) => {
+            if msg_create.guild_id.is_none() || !msg_create.content.starts_with('!') {
+                return None;
+            }
+            let split: Vec<&str> = msg_create.content.splitn(2, ' ').collect();
+            match split.as_slice() {
+                ["!play", query] => {
+                    Some(ChatCommand::Play(msg_create.0.clone(), query.to_string()))
+                }
+                ["!stop"] | ["!stop", _] => Some(ChatCommand::Stop(msg_create.0)),
+                ["!leave"] | ["!leave", _] => Some(ChatCommand::Leave(msg_create.0)),
+                ["!join"] | ["!join", _] => Some(ChatCommand::Join(msg_create.0)),
+                _ => Some(ChatCommand::NotImplemented),
+            }
+        }
+        _ => None,
+    }
+}
+
 fn spawn(
     fut: impl Future<Output = Result<(), Box<dyn Error + Send + Sync + 'static>>> + Send + 'static,
 ) {
@@ -119,18 +148,12 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         state.standby.process(&event);
         state.songbird.process(&event).await;
 
-        if let Event::MessageCreate(msg) = event {
-            if msg.guild_id.is_none() || !msg.content.starts_with('!') {
-                continue;
-            }
-
-            match msg.content.split(' ').next() {
-                Some("!join") => spawn(join(msg.0, Arc::clone(&state))),
-                Some("!leave") => spawn(leave(msg.0, Arc::clone(&state))),
-                Some("!play") => spawn(play(msg.0, Arc::clone(&state))),
-                Some("!stop") => spawn(stop(msg.0, Arc::clone(&state))),
-                _ => continue,
-            }
+        match parse_command(event) {
+            Some(ChatCommand::Play(msg, query)) => spawn(play(msg, Arc::clone(&state), query)),
+            Some(ChatCommand::Stop(msg)) => spawn(stop(msg, Arc::clone(&state))),
+            Some(ChatCommand::Leave(msg)) => spawn(leave(msg, Arc::clone(&state))),
+            Some(ChatCommand::Join(msg)) => spawn(join(msg, Arc::clone(&state))),
+            _ => {}
         }
     }
 
@@ -166,7 +189,11 @@ async fn leave(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + 
     Ok(())
 }
 
-async fn play(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+async fn play(
+    msg: Message,
+    state: State,
+    query: String,
+) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     tracing::debug!(
         "play command in channel {} by {}",
         msg.channel_id,
@@ -177,8 +204,7 @@ async fn play(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + S
 
     let guild_id = msg.guild_id.unwrap();
 
-    let url = msg.content.replace("!play", "").trim().to_string();
-    let mut src = YoutubeDl::new(reqwest::Client::new(), url);
+    let mut src = YoutubeDl::new(reqwest::Client::new(), query);
     if let Ok(metadata) = src.aux_metadata().await {
         debug!("metadata: {:?}", metadata);
 
