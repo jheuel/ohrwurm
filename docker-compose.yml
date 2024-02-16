@@ -1,0 +1,10 @@
+---
+version: "2.1"
+services:
+  djheuel:
+    build: .
+    container_name: DJHeuel
+    restart: unless-stopped
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_APP_ID=${DISCORD_APP_ID}

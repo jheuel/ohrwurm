@@ -1,0 +1,14 @@
+# Docker files
+Dockerfile
+.dockerignore
+
+# Git files
+.git
+.github
+.gitignore
+LICENSE
+README.md
+
+# Cargo files
+**/*.rs.bk
+/target/
