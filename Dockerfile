@@ -22,6 +22,6 @@ FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y python3-pip ffmpeg
 RUN pip install -U yt-dlp
 
-COPY --from=build /app/target/release/djheuel .
+COPY --from=build /app/target/release/ohrwurm .
 
-CMD ["./djheuel"]
+CMD ["./ohrwurm"]

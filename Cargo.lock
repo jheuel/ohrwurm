@@ -3,6 +3,29 @@
 version = 3
 
 [[package]]
+name = "Ohrwurm"
+version = "0.1.0"
+dependencies = [
+ "dotenv",
+ "futures",
+ "regex",
+ "reqwest",
+ "serde_json",
+ "songbird",
+ "symphonia",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.2.25",
+ "twilight-cache-inmemory",
+ "twilight-gateway",
+ "twilight-http",
+ "twilight-model",
+ "twilight-standby",
+ "twilight-util",
+ "url",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -394,29 +417,6 @@ checksum = "5c793408a15d361754613fa68123ffa60424c2617fafdf82127b4bedf37d3f5d"
 dependencies = [
  "pnet_macros",
  "pnet_macros_support",
-]
-
-[[package]]
-name = "djheuel"
-version = "0.1.0"
-dependencies = [
- "dotenv",
- "futures",
- "regex",
- "reqwest",
- "serde_json",
- "songbird",
- "symphonia",
- "tokio",
- "tracing",
- "tracing-subscriber 0.2.25",
- "twilight-cache-inmemory",
- "twilight-gateway",
- "twilight-http",
- "twilight-model",
- "twilight-standby",
- "twilight-util",
- "url",
 ]
 
 [[package]]

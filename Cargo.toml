@@ -1,5 +1,5 @@
 [package]
-name = "djheuel"
+name = "ohrwurm"
 version = "0.1.0"
 authors = ["Johannes Heuel <johannes.heuel@rwth-aachen.de>"]
 edition = "2021"

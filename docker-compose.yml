@@ -1,9 +1,9 @@
 ---
 version: "2.1"
 services:
-  djheuel:
+  ohrwurm:
     build: .
-    container_name: DJHeuel
+    container_name: ohrwurm
     restart: unless-stopped
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
