@@ -20,10 +20,10 @@ use twilight_gateway::{
     Intents, Shard,
 };
 use twilight_http::Client as HttpClient;
-use twilight_model::application::command::CommandType;
 use twilight_model::id::Id;
 use twilight_standby::Standby;
-use twilight_util::builder::command::{CommandBuilder, StringBuilder};
+
+use crate::commands::get_chat_commands;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -55,16 +55,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         let application_id = Id::new(app_id);
         let interaction_client = http.interaction(application_id);
 
-        let commands = &[
-            CommandBuilder::new("play", "Add a song to the queue", CommandType::ChatInput)
-                .option(StringBuilder::new("query", "URL of a song").required(true))
-                .build(),
-            CommandBuilder::new("stop", "Stop playing", CommandType::ChatInput).build(),
-            CommandBuilder::new("join", "Join the channel", CommandType::ChatInput).build(),
-            CommandBuilder::new("leave", "Leave the channel", CommandType::ChatInput).build(),
-        ];
-        interaction_client.set_global_commands(commands).await?;
-
+        interaction_client
+            .set_global_commands(&get_chat_commands())
+            .await?;
         let commands = interaction_client.global_commands().await?.models().await?;
         debug!("Global commands: {:?}", commands);
 
