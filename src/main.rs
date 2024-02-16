@@ -27,12 +27,18 @@ use crate::commands::get_chat_commands;
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     dotenv().ok();
 
+    println!("Starting up...");
+
     // Initialize the tracing subscriber.
     tracing_subscriber::fmt::init();
 
+    info!("Starting up...");
+
     let (mut shards, state) = {
-        let token = env::var("DISCORD_TOKEN")?;
-        let app_id = env::var("DISCORD_APP_ID")?.parse()?;
+        let token = env::var("DISCORD_TOKEN").map_err(|_| "DISCORD_TOKEN is not set")?;
+        let app_id = env::var("DISCORD_APP_ID")
+            .map_err(|_| "DISCORD_APP_ID is not set")?
+            .parse()?;
 
         let http = HttpClient::new(token.clone());
         let user_id = http.current_user().await?.model().await?.id;
@@ -73,6 +79,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             }),
         )
     };
+
+    info!("Ready to receive events");
 
     let mut handler = Handler::new(Arc::clone(&state));
     let mut stop_rx = signal_handler();

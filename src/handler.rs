@@ -1,4 +1,4 @@
-use crate::commands::{join, leave, pause, play, queue, resume, stop};
+use crate::commands::{delete, join, leave, pause, play, queue, resume, stop};
 use crate::state::State;
 
 use futures::Future;
@@ -16,6 +16,7 @@ enum ChatCommand {
     Leave(Message),
     Join(Message),
     Queue(Message),
+    Delete(Message),
     NotImplemented,
 }
 
@@ -36,6 +37,7 @@ fn parse_command(event: Event) -> Option<ChatCommand> {
                 ["!leave"] | ["!leave", _] => Some(ChatCommand::Leave(msg_create.0)),
                 ["!join"] | ["!join", _] => Some(ChatCommand::Join(msg_create.0)),
                 ["!queue"] | ["!queue", _] => Some(ChatCommand::Queue(msg_create.0)),
+                ["!delete"] | ["!delete", _] => Some(ChatCommand::Delete(msg_create.0)),
                 _ => Some(ChatCommand::NotImplemented),
             }
         }
@@ -70,6 +72,7 @@ impl Handler {
             Some(ChatCommand::Leave(msg)) => spawn(leave(msg, Arc::clone(&self.state))),
             Some(ChatCommand::Join(msg)) => spawn(join(msg, Arc::clone(&self.state))),
             Some(ChatCommand::Queue(msg)) => spawn(queue(msg, Arc::clone(&self.state))),
+            Some(ChatCommand::Delete(msg)) => spawn(delete(msg, Arc::clone(&self.state))),
             _ => {}
         }
     }

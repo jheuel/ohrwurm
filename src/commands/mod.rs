@@ -19,6 +19,9 @@ pub(crate) use resume::resume;
 mod stop;
 pub(crate) use stop::stop;
 
+mod delete;
+pub(crate) use delete::delete;
+
 use twilight_model::application::command::CommandType;
 use twilight_util::builder::command::{CommandBuilder, StringBuilder};
 
