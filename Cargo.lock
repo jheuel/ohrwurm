@@ -416,6 +416,7 @@ dependencies = [
  "twilight-model",
  "twilight-standby",
  "twilight-util",
+ "url",
 ]
 
 [[package]]

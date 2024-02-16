@@ -1,94 +1,29 @@
+mod handler;
+use handler::Handler;
+mod commands;
+mod metadata;
+mod state;
 use dotenv::dotenv;
 use futures::StreamExt;
-use serde_json::Value;
-use songbird::{
-    input::{Compose, YoutubeDl},
-    shards::TwilightMap,
-    typemap::TypeMapKey,
-    Songbird,
+use songbird::{shards::TwilightMap, Songbird};
+use state::StateRef;
+use std::{env, error::Error, sync::Arc};
+use tokio::{
+    select,
+    signal::unix::{signal, SignalKind},
+    sync::watch,
 };
-use std::{
-    env,
-    error::Error,
-    future::Future,
-    io::{BufRead, BufReader},
-    num::NonZeroU64,
-    ops::Sub,
-    sync::Arc,
-    time::Duration,
-};
-use tokio::process::Command;
-use tracing::debug;
+use tracing::{debug, info};
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::{
     stream::{self, ShardEventStream},
-    Event, Intents, Shard,
+    Intents, Shard,
 };
 use twilight_http::Client as HttpClient;
 use twilight_model::application::command::CommandType;
-use twilight_model::{channel::Message, id::Id};
+use twilight_model::id::Id;
 use twilight_standby::Standby;
 use twilight_util::builder::command::{CommandBuilder, StringBuilder};
-
-type State = Arc<StateRef>;
-
-#[derive(Debug)]
-struct StateRef {
-    http: HttpClient,
-    cache: InMemoryCache,
-    songbird: Songbird,
-    standby: Standby,
-}
-
-struct Metadata {
-    title: Option<String>,
-    artist: Option<String>,
-}
-struct MetadataMap;
-impl TypeMapKey for MetadataMap {
-    type Value = Metadata;
-}
-
-enum ChatCommand {
-    Play(Message, String),
-    Stop(Message),
-    Leave(Message),
-    Join(Message),
-    Queue(Message),
-    NotImplemented,
-}
-
-fn parse_command(event: Event) -> Option<ChatCommand> {
-    match event {
-        Event::MessageCreate(msg_create) => {
-            if msg_create.guild_id.is_none() || !msg_create.content.starts_with('!') {
-                return None;
-            }
-            let split: Vec<&str> = msg_create.content.splitn(2, ' ').collect();
-            match split.as_slice() {
-                ["!play", query] => {
-                    Some(ChatCommand::Play(msg_create.0.clone(), query.to_string()))
-                }
-                ["!stop"] | ["!stop", _] => Some(ChatCommand::Stop(msg_create.0)),
-                ["!leave"] | ["!leave", _] => Some(ChatCommand::Leave(msg_create.0)),
-                ["!join"] | ["!join", _] => Some(ChatCommand::Join(msg_create.0)),
-                ["!queue"] | ["!queue", _] => Some(ChatCommand::Queue(msg_create.0)),
-                _ => Some(ChatCommand::NotImplemented),
-            }
-        }
-        _ => None,
-    }
-}
-
-fn spawn(
-    fut: impl Future<Output = Result<(), Box<dyn Error + Send + Sync + 'static>>> + Send + 'static,
-) {
-    tokio::spawn(async move {
-        if let Err(why) = fut.await {
-            tracing::debug!("handler error: {:?}", why);
-        }
-    });
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -96,6 +31,20 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     // Initialize the tracing subscriber.
     tracing_subscriber::fmt::init();
+
+    let (stop_tx, mut stop_rx) = watch::channel(());
+
+    tokio::spawn(async move {
+        let mut sigterm = signal(SignalKind::terminate()).unwrap();
+        let mut sigint = signal(SignalKind::interrupt()).unwrap();
+        loop {
+            select! {
+                _ = sigterm.recv() => println!("Receive SIGTERM"),
+                _ = sigint.recv() => println!("Receive SIGTERM"),
+            };
+            stop_tx.send(()).unwrap();
+        }
+    });
 
     let (mut shards, state) = {
         let token = env::var("DISCORD_TOKEN")?;
@@ -148,209 +97,43 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         )
     };
 
+    let mut handler = Handler::new(Arc::clone(&state));
     let mut stream = ShardEventStream::new(shards.iter_mut());
     loop {
-        let event = match stream.next().await {
-            Some((_, Ok(event))) => event,
-            Some((_, Err(source))) => {
-                tracing::warn!(?source, "error receiving event");
-
-                if source.is_fatal() {
-                    break;
+        select! {
+            biased;
+            _ = stop_rx.changed() => {
+                for guild in state.cache.iter().guilds(){
+                    info!("Leaving guild {:?}", guild.id());
+                    state.songbird.leave(guild.id()).await?;
                 }
+                // need to grab next event to properly leave voice channels
+                stream.next().await;
+                break;
+            },
+            next = stream.next() => {
+                let event = match next {
+                    Some((_, Ok(event))) => event,
+                    Some((_, Err(source))) => {
+                        tracing::warn!(?source, "error receiving event");
 
-                continue;
-            }
-            None => break,
-        };
-        debug!("Event: {:?}", &event);
-
-        state.cache.update(&event);
-        state.standby.process(&event);
-        state.songbird.process(&event).await;
-
-        match parse_command(event) {
-            Some(ChatCommand::Play(msg, query)) => spawn(play(msg, Arc::clone(&state), query)),
-            Some(ChatCommand::Stop(msg)) => spawn(stop(msg, Arc::clone(&state))),
-            Some(ChatCommand::Leave(msg)) => spawn(leave(msg, Arc::clone(&state))),
-            Some(ChatCommand::Join(msg)) => spawn(join(msg, Arc::clone(&state))),
-            Some(ChatCommand::Queue(msg)) => spawn(queue(msg, Arc::clone(&state))),
-            _ => {}
-        }
-    }
-
-    Ok(())
-}
-
-async fn join(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    let user_id = msg.author.id;
-    let guild_id = msg.guild_id.ok_or("No guild id attached to the message.")?;
-    let channel_id = state
-        .cache
-        .voice_state(user_id, guild_id)
-        .ok_or("Cannot get voice state for user")?
-        .channel_id();
-    let channel_id =
-        NonZeroU64::new(channel_id.into()).ok_or("Joined voice channel must have nonzero ID.")?;
-    state
-        .songbird
-        .join(guild_id, channel_id)
-        .await
-        .map_err(|e| format!("Could not join voice channel: {:?}", e))?;
-
-    // signal that we are not listening
-    if let Some(call_lock) = state.songbird.get(guild_id) {
-        let mut call = call_lock.lock().await;
-        call.deafen(true).await?;
-    }
-    Ok(())
-}
-
-async fn leave(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    tracing::debug!(
-        "leave command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
-    );
-    let guild_id = msg.guild_id.unwrap();
-    state.songbird.leave(guild_id).await?;
-    Ok(())
-}
-
-async fn get_playlist_urls(
-    url: String,
-) -> Result<Vec<String>, Box<dyn Error + Send + Sync + 'static>> {
-    let output = Command::new("yt-dlp")
-        .args(vec![&url, "--flat-playlist", "-j"])
-        .output()
-        .await?;
-
-    let reader = BufReader::new(output.stdout.as_slice());
-    let urls = reader
-        .lines()
-        .flatten()
-        .map(|line| {
-            let entry: Value = serde_json::from_str(&line).unwrap();
-            entry
-                .get("webpage_url")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string()
-        })
-        .collect();
-
-    Ok(urls)
-}
-
-async fn queue(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    tracing::debug!(
-        "queue command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
-    );
-    let guild_id = msg.guild_id.unwrap();
-
-    if let Some(call_lock) = state.songbird.get(guild_id) {
-        let call = call_lock.lock().await;
-        let queue = call.queue().current_queue();
-        let mut message = String::new();
-        message.push_str("Currently playing:\n");
-        for track in queue {
-            let map = track.typemap().read().await;
-            let metadata = map.get::<MetadataMap>().unwrap();
-            message.push_str(
-                format!(
-                    "* {}\n",
-                    metadata.title.clone().unwrap_or("Unknown".to_string()),
-                )
-                .as_str(),
-            );
-        }
-        state
-            .http
-            .create_message(msg.channel_id)
-            .content(&message)?
-            .await?;
-    }
-    Ok(())
-}
-
-async fn play(
-    msg: Message,
-    state: State,
-    query: String,
-) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    tracing::debug!(
-        "play command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
-    );
-
-    join(msg.clone(), state.clone()).await?;
-
-    let guild_id = msg.guild_id.unwrap();
-
-    let urls = if query.contains("list=") {
-        get_playlist_urls(query).await?
-    } else {
-        vec![query]
-    };
-
-    for url in urls {
-        let mut src = YoutubeDl::new(reqwest::Client::new(), url.to_string());
-        if let Ok(metadata) = src.aux_metadata().await {
-            debug!("metadata: {:?}", metadata);
-
-            if let Some(call_lock) = state.songbird.get(guild_id) {
-                let mut call = call_lock.lock().await;
-                let handle = call.enqueue_with_preload(
-                    src.into(),
-                    metadata.duration.map(|duration| -> Duration {
-                        if duration.as_secs() > 5 {
-                            duration.sub(Duration::from_secs(5))
-                        } else {
-                            duration
+                        if source.is_fatal() {
+                            break;
                         }
-                    }),
-                );
-                let mut x = handle.typemap().write().await;
-                x.insert::<MetadataMap>(Metadata {
-                    title: metadata.title,
-                    artist: metadata.artist,
-                });
+
+                        continue;
+                    }
+                    None => break,
+                };
+                debug!("Event: {:?}", &event);
+
+                state.cache.update(&event);
+                state.standby.process(&event);
+                state.songbird.process(&event).await;
+
+                handler.act(event).await;
             }
-        } else {
-            state
-                .http
-                .create_message(msg.channel_id)
-                .content("Cannot find any results")?
-                .await?;
         }
     }
-
-    Ok(())
-}
-
-async fn stop(msg: Message, state: State) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    tracing::debug!(
-        "stop command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
-    );
-
-    let guild_id = msg.guild_id.unwrap();
-
-    if let Some(call_lock) = state.songbird.get(guild_id) {
-        let mut call = call_lock.lock().await;
-        call.stop();
-    }
-
-    state
-        .http
-        .create_message(msg.channel_id)
-        .content("Stopped the track")?
-        .await?;
-
     Ok(())
 }
