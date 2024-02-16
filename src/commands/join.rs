@@ -17,18 +17,18 @@ pub(crate) async fn join(
     let channel_id =
         NonZeroU64::new(channel_id.into()).ok_or("Joined voice channel must have nonzero ID.")?;
 
-    // signal that we are not listening
-    if let Some(call_lock) = state.songbird.get(guild_id) {
-        let mut call = call_lock.lock().await;
-        call.deafen(true).await?;
-    }
-
     // join the voice channel
     state
         .songbird
         .join(guild_id, channel_id)
         .await
         .map_err(|e| format!("Could not join voice channel: {:?}", e))?;
+
+    // signal that we are not listening
+    if let Some(call_lock) = state.songbird.get(guild_id) {
+        let mut call = call_lock.lock().await;
+        call.deafen(true).await?;
+    }
 
     Ok(())
 }
