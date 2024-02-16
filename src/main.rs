@@ -2,17 +2,15 @@ mod handler;
 use handler::Handler;
 mod commands;
 mod metadata;
+mod signal;
 mod state;
 use dotenv::dotenv;
 use futures::StreamExt;
+use signal::signal_handler;
 use songbird::{shards::TwilightMap, Songbird};
 use state::StateRef;
 use std::{env, error::Error, sync::Arc};
-use tokio::{
-    select,
-    signal::unix::{signal, SignalKind},
-    sync::watch,
-};
+use tokio::select;
 use tracing::{debug, info};
 use twilight_cache_inmemory::InMemoryCache;
 use twilight_gateway::{
@@ -31,20 +29,6 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     // Initialize the tracing subscriber.
     tracing_subscriber::fmt::init();
-
-    let (stop_tx, mut stop_rx) = watch::channel(());
-
-    tokio::spawn(async move {
-        let mut sigterm = signal(SignalKind::terminate()).unwrap();
-        let mut sigint = signal(SignalKind::interrupt()).unwrap();
-        loop {
-            select! {
-                _ = sigterm.recv() => println!("Receive SIGTERM"),
-                _ = sigint.recv() => println!("Receive SIGTERM"),
-            };
-            stop_tx.send(()).unwrap();
-        }
-    });
 
     let (mut shards, state) = {
         let token = env::var("DISCORD_TOKEN")?;
@@ -91,6 +75,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     };
 
     let mut handler = Handler::new(Arc::clone(&state));
+    let mut stop_rx = signal_handler();
     let mut stream = ShardEventStream::new(shards.iter_mut());
     loop {
         select! {
@@ -109,11 +94,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                     Some((_, Ok(event))) => event,
                     Some((_, Err(source))) => {
                         tracing::warn!(?source, "error receiving event");
-
                         if source.is_fatal() {
                             break;
                         }
-
                         continue;
                     }
                     None => break,
