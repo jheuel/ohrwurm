@@ -23,7 +23,7 @@ mod delete;
 pub(crate) use delete::delete;
 
 use twilight_model::application::command::CommandType;
-use twilight_util::builder::command::{CommandBuilder, StringBuilder};
+use twilight_util::builder::command::{CommandBuilder, IntegerBuilder, StringBuilder};
 
 pub(crate) fn get_chat_commands() -> Vec<twilight_model::application::command::Command> {
     vec![
@@ -36,5 +36,8 @@ pub(crate) fn get_chat_commands() -> Vec<twilight_model::application::command::C
         CommandBuilder::new("queue", "Print track queue", CommandType::ChatInput).build(),
         CommandBuilder::new("resume", "Resume playing", CommandType::ChatInput).build(),
         CommandBuilder::new("stop", "Stop playing", CommandType::ChatInput).build(),
+        CommandBuilder::new("delete", "Delete messages in chat", CommandType::ChatInput)
+            .option(IntegerBuilder::new("count", "How many messages to delete").required(true))
+            .build(),
     ]
 }

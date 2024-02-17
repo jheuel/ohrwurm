@@ -1,4 +1,4 @@
-use crate::commands::join;
+use crate::commands::join::join_channel;
 use crate::metadata::{Metadata, MetadataMap};
 use crate::state::State;
 use serde_json::Value;
@@ -7,23 +7,31 @@ use std::io::{BufRead, BufReader};
 use std::{error::Error, ops::Sub, time::Duration};
 use tokio::process::Command;
 use tracing::debug;
-use twilight_model::channel::Message;
+use twilight_model::application::interaction::Interaction;
+use twilight_model::channel::message::MessageFlags;
+use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
+use twilight_util::builder::InteractionResponseDataBuilder;
 use url::Url;
 
 pub(crate) async fn play(
-    msg: Message,
+    interaction: Interaction,
     state: State,
     query: String,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    tracing::debug!(
-        "play command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
+    debug!(
+        "play command in channel {:?} by {:?}",
+        interaction.channel,
+        interaction.author(),
     );
 
-    join(msg.clone(), state.clone()).await?;
+    let Some(user_id) = interaction.author_id() else {
+        return Ok(());
+    };
+    let Some(guild_id) = interaction.guild_id else {
+        return Ok(());
+    };
 
-    let guild_id = msg.guild_id.unwrap();
+    join_channel(state.clone(), guild_id, user_id).await?;
 
     // handle keyword queries
     let query = if Url::parse(&query).is_err() {
@@ -31,6 +39,24 @@ pub(crate) async fn play(
     } else {
         query
     };
+
+    debug!("query: {:?}", query);
+
+    let interaction_response_data = InteractionResponseDataBuilder::new()
+        .content("Adding tracks to the queue ...")
+        .flags(MessageFlags::EPHEMERAL)
+        .build();
+
+    let response = InteractionResponse {
+        kind: InteractionResponseType::ChannelMessageWithSource,
+        data: Some(interaction_response_data),
+    };
+
+    state
+        .http
+        .interaction(interaction.application_id)
+        .create_response(interaction.id, &interaction.token, &response)
+        .await?;
 
     // handle playlist links
     let urls = if query.contains("list=") {
@@ -62,12 +88,6 @@ pub(crate) async fn play(
                     duration: metadata.duration,
                 });
             }
-        } else {
-            state
-                .http
-                .create_message(msg.channel_id)
-                .content("Cannot find any results")?
-                .await?;
         }
     }
 

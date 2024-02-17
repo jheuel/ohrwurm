@@ -4,45 +4,23 @@ use crate::state::State;
 use futures::Future;
 use std::error::Error;
 use std::sync::Arc;
+use tracing::debug;
+use twilight_model::application::interaction::application_command::CommandOptionValue;
+use twilight_model::application::interaction::{Interaction, InteractionData};
 
 use twilight_gateway::Event;
-use twilight_model::channel::Message;
 
-enum ChatCommand {
-    Play(Message, String),
-    Stop(Message),
-    Pause(Message),
-    Resume(Message),
-    Leave(Message),
-    Join(Message),
-    Queue(Message),
-    Delete(Message),
+#[derive(Debug)]
+enum InteractionCommand {
+    Play(Interaction, String),
+    Stop(Interaction),
+    Pause(Interaction),
+    Resume(Interaction),
+    Leave(Interaction),
+    Join(Interaction),
+    Queue(Interaction),
+    Delete(Interaction, i64),
     NotImplemented,
-}
-
-fn parse_command(event: Event) -> Option<ChatCommand> {
-    match event {
-        Event::MessageCreate(msg_create) => {
-            if msg_create.guild_id.is_none() || !msg_create.content.starts_with('!') {
-                return None;
-            }
-            let split: Vec<&str> = msg_create.content.splitn(2, ' ').collect();
-            match split.as_slice() {
-                ["!play", query] => {
-                    Some(ChatCommand::Play(msg_create.0.clone(), query.to_string()))
-                }
-                ["!stop"] | ["!stop", _] => Some(ChatCommand::Stop(msg_create.0)),
-                ["!pause"] | ["!pause", _] => Some(ChatCommand::Pause(msg_create.0)),
-                ["!resume"] | ["!resume", _] => Some(ChatCommand::Resume(msg_create.0)),
-                ["!leave"] | ["!leave", _] => Some(ChatCommand::Leave(msg_create.0)),
-                ["!join"] | ["!join", _] => Some(ChatCommand::Join(msg_create.0)),
-                ["!queue"] | ["!queue", _] => Some(ChatCommand::Queue(msg_create.0)),
-                ["!delete"] | ["!delete", _] => Some(ChatCommand::Delete(msg_create.0)),
-                _ => Some(ChatCommand::NotImplemented),
-            }
-        }
-        _ => None,
-    }
 }
 
 fn spawn(
@@ -63,17 +41,84 @@ impl Handler {
     pub(crate) fn new(state: State) -> Self {
         Self { state }
     }
-    pub(crate) async fn act(&mut self, event: Event) {
-        match parse_command(event) {
-            Some(ChatCommand::Play(msg, query)) => spawn(play(msg, Arc::clone(&self.state), query)),
-            Some(ChatCommand::Stop(msg)) => spawn(stop(msg, Arc::clone(&self.state))),
-            Some(ChatCommand::Pause(msg)) => spawn(pause(msg, Arc::clone(&self.state))),
-            Some(ChatCommand::Resume(msg)) => spawn(resume(msg, Arc::clone(&self.state))),
-            Some(ChatCommand::Leave(msg)) => spawn(leave(msg, Arc::clone(&self.state))),
-            Some(ChatCommand::Join(msg)) => spawn(join(msg, Arc::clone(&self.state))),
-            Some(ChatCommand::Queue(msg)) => spawn(queue(msg, Arc::clone(&self.state))),
-            Some(ChatCommand::Delete(msg)) => spawn(delete(msg, Arc::clone(&self.state))),
+    pub(crate) async fn act(&self, event: Event) {
+        let interaction_command = match event {
+            Event::InteractionCreate(interaction) => {
+                debug!("interaction: {:?}", &interaction);
+                match &interaction.data {
+                    Some(InteractionData::ApplicationCommand(command)) => {
+                        debug!("command: {:?}", command);
+                        match command.name.as_str() {
+                            "play" => {
+                                if let Some(query_option) =
+                                    command.options.iter().find(|opt| opt.name == "query")
+                                {
+                                    if let CommandOptionValue::String(query) = &query_option.value {
+                                        InteractionCommand::Play(
+                                            interaction.0.clone(),
+                                            query.clone(),
+                                        )
+                                    } else {
+                                        InteractionCommand::NotImplemented
+                                    }
+                                } else {
+                                    InteractionCommand::NotImplemented
+                                }
+                            }
+                            "stop" => InteractionCommand::Stop(interaction.0.clone()),
+                            "pause" => InteractionCommand::Pause(interaction.0.clone()),
+                            "resume" => InteractionCommand::Resume(interaction.0.clone()),
+                            "leave" => InteractionCommand::Leave(interaction.0.clone()),
+                            "join" => InteractionCommand::Join(interaction.0.clone()),
+                            "queue" => InteractionCommand::Queue(interaction.0.clone()),
+                            "delete" => {
+                                if let Some(count_option) =
+                                    command.options.iter().find(|opt| opt.name == "count")
+                                {
+                                    if let CommandOptionValue::Integer(count) = count_option.value {
+                                        InteractionCommand::Delete(interaction.0.clone(), count)
+                                    } else {
+                                        InteractionCommand::NotImplemented
+                                    }
+                                } else {
+                                    InteractionCommand::NotImplemented
+                                }
+                            }
+                            _ => InteractionCommand::NotImplemented,
+                        }
+                    }
+                    _ => InteractionCommand::NotImplemented,
+                }
+            }
+            _ => InteractionCommand::NotImplemented,
+        };
+        debug!("{:?}", interaction_command);
+        match interaction_command {
+            InteractionCommand::Play(interaction, query) => {
+                spawn(play(interaction, Arc::clone(&self.state), query))
+            }
+            InteractionCommand::Stop(interaction) => {
+                spawn(stop(interaction, Arc::clone(&self.state)))
+            }
+            InteractionCommand::Pause(interaction) => {
+                spawn(pause(interaction, Arc::clone(&self.state)))
+            }
+            InteractionCommand::Resume(interaction) => {
+                spawn(resume(interaction, Arc::clone(&self.state)))
+            }
+            InteractionCommand::Leave(interaction) => {
+                spawn(leave(interaction, Arc::clone(&self.state)))
+            }
+            InteractionCommand::Join(interaction) => {
+                spawn(join(interaction, Arc::clone(&self.state)))
+            }
+            InteractionCommand::Queue(interaction) => {
+                spawn(queue(interaction, Arc::clone(&self.state)))
+            }
+            InteractionCommand::Delete(interaction, count) => {
+                spawn(delete(interaction, Arc::clone(&self.state), count))
+            }
             _ => {}
-        }
+        };
     }
 }

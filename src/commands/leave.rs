@@ -1,17 +1,21 @@
 use crate::state::State;
 use std::error::Error;
-use twilight_model::channel::Message;
+use twilight_model::application::interaction::Interaction;
 
 pub(crate) async fn leave(
-    msg: Message,
+    interaction: Interaction,
     state: State,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     tracing::debug!(
-        "leave command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
+        "leave command n guild {:?} in channel {:?} by {:?}",
+        interaction.guild_id,
+        interaction.channel,
+        interaction.author(),
     );
-    let guild_id = msg.guild_id.unwrap();
+
+    let Some(guild_id) = interaction.guild_id else {
+        return Ok(());
+    };
     state.songbird.leave(guild_id).await?;
     Ok(())
 }

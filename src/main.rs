@@ -82,7 +82,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     info!("Ready to receive events");
 
-    let mut handler = Handler::new(Arc::clone(&state));
+    let handler = Handler::new(Arc::clone(&state));
     let mut stop_rx = signal_handler();
     let mut stream = ShardEventStream::new(shards.iter_mut());
     loop {

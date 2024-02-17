@@ -1,18 +1,26 @@
+use twilight_model::http::interaction::InteractionResponseType;
+use twilight_model::{
+    application::interaction::Interaction, channel::message::MessageFlags,
+    http::interaction::InteractionResponse,
+};
+use twilight_util::builder::InteractionResponseDataBuilder;
+
 use crate::{metadata::MetadataMap, state::State};
 use std::error::Error;
-use twilight_model::channel::Message;
 
 pub(crate) async fn queue(
-    msg: Message,
+    interaction: Interaction,
     state: State,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     tracing::debug!(
-        "queue command in channel {} by {}",
-        msg.channel_id,
-        msg.author.name
+        "queue command in guild {:?} in channel {:?} by {:?}",
+        interaction.guild_id,
+        interaction.channel,
+        interaction.author(),
     );
-    let guild_id = msg.guild_id.unwrap();
-
+    let Some(guild_id) = interaction.guild_id else {
+        return Ok(());
+    };
     if let Some(call_lock) = state.songbird.get(guild_id) {
         let call = call_lock.lock().await;
         let queue = call.queue().current_queue();
@@ -48,10 +56,21 @@ pub(crate) async fn queue(
             }
             message.push_str("`\n");
         }
+
+        let interaction_response_data = InteractionResponseDataBuilder::new()
+            .content(&message)
+            .flags(MessageFlags::EPHEMERAL)
+            .build();
+
+        let response = InteractionResponse {
+            kind: InteractionResponseType::ChannelMessageWithSource,
+            data: Some(interaction_response_data),
+        };
+
         state
             .http
-            .create_message(msg.channel_id)
-            .content(&message)?
+            .interaction(interaction.application_id)
+            .create_response(interaction.id, &interaction.token, &response)
             .await?;
     }
     Ok(())
