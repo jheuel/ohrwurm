@@ -19,7 +19,6 @@ enum InteractionCommand {
     Leave(Interaction),
     Join(Interaction),
     Queue(Interaction),
-    Delete(Interaction, i64),
     NotImplemented,
 }
 
@@ -42,6 +41,15 @@ impl Handler {
         Self { state }
     }
     pub(crate) async fn act(&self, event: Event) {
+        match &event {
+            Event::MessageCreate(message) if message.content.starts_with("!") => {
+                if message.content.contains("!delete") {
+                    spawn(delete(message.0.clone(), Arc::clone(&self.state)));
+                }
+            }
+            _ => {}
+        }
+
         let interaction_command = match event {
             Event::InteractionCreate(interaction) => {
                 debug!("interaction: {:?}", &interaction);
@@ -71,19 +79,6 @@ impl Handler {
                             "leave" => InteractionCommand::Leave(interaction.0.clone()),
                             "join" => InteractionCommand::Join(interaction.0.clone()),
                             "queue" => InteractionCommand::Queue(interaction.0.clone()),
-                            "delete" => {
-                                if let Some(count_option) =
-                                    command.options.iter().find(|opt| opt.name == "count")
-                                {
-                                    if let CommandOptionValue::Integer(count) = count_option.value {
-                                        InteractionCommand::Delete(interaction.0.clone(), count)
-                                    } else {
-                                        InteractionCommand::NotImplemented
-                                    }
-                                } else {
-                                    InteractionCommand::NotImplemented
-                                }
-                            }
                             _ => InteractionCommand::NotImplemented,
                         }
                     }
@@ -114,9 +109,6 @@ impl Handler {
             }
             InteractionCommand::Queue(interaction) => {
                 spawn(queue(interaction, Arc::clone(&self.state)))
-            }
-            InteractionCommand::Delete(interaction, count) => {
-                spawn(delete(interaction, Arc::clone(&self.state), count))
             }
             _ => {}
         };

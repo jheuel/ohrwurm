@@ -48,8 +48,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         interaction_client
             .set_global_commands(&get_chat_commands())
             .await?;
-        let commands = interaction_client.global_commands().await?.models().await?;
-        debug!("Global commands: {:?}", commands);
+        // let commands = interaction_client.global_commands().await?.models().await?;
+        // debug!("Global commands: {:?}", commands);
 
         let intents = Intents::GUILDS
             | Intents::GUILD_MESSAGES
