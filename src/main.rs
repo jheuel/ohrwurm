@@ -4,6 +4,7 @@ mod commands;
 mod metadata;
 mod signal;
 mod state;
+use crate::commands::get_chat_commands;
 use dotenv::dotenv;
 use futures::StreamExt;
 use signal::signal_handler;
@@ -20,8 +21,6 @@ use twilight_gateway::{
 use twilight_http::Client as HttpClient;
 use twilight_model::id::Id;
 use twilight_standby::Standby;
-
-use crate::commands::get_chat_commands;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -89,9 +88,13 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         select! {
             biased;
             _ = stop_rx.changed() => {
-                for guild in state.cache.iter().guilds(){
-                    info!("Leaving guild {:?}", guild.id());
-                    state.songbird.leave(guild.id()).await?;
+                for guild in state.cache.iter().guilds() {
+                    if let Some(user) = state.cache.current_user() {
+                        if state.cache.voice_state(user.id, guild.id()).is_some() {
+                            debug!("Leaving guild {:?}", guild.id());
+                            state.songbird.leave(guild.id()).await?;
+                        }
+                    }
                 }
                 // need to grab next event to properly leave voice channels
                 stream.next().await;

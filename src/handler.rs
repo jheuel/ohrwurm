@@ -1,14 +1,13 @@
 use crate::commands::{delete, join, leave, pause, play, queue, resume, stop};
 use crate::state::State;
-
 use futures::Future;
 use std::error::Error;
 use std::sync::Arc;
 use tracing::debug;
+use twilight_gateway::Event;
 use twilight_model::application::interaction::application_command::CommandOptionValue;
 use twilight_model::application::interaction::{Interaction, InteractionData};
-
-use twilight_gateway::Event;
+use twilight_model::gateway::payload::incoming::VoiceStateUpdate;
 
 #[derive(Debug)]
 enum InteractionCommand {
@@ -32,6 +31,42 @@ fn spawn(
     });
 }
 
+pub(crate) async fn leave_if_alone(
+    update: VoiceStateUpdate,
+    state: State,
+) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    let guild_id = update.guild_id.ok_or("Guild ID not found")?;
+    let user = state
+        .cache
+        .current_user()
+        .ok_or("Cannot get current user")?;
+    let user_voice_state = state
+        .cache
+        .voice_state(user.id, guild_id)
+        .ok_or("Cannot get voice state")?;
+    let channel = state
+        .cache
+        .channel(user_voice_state.channel_id())
+        .ok_or("Cannot get channel")?;
+    let channel_voice_states = state
+        .cache
+        .voice_channel_states(channel.id)
+        .ok_or("Cannot get voice channel")?;
+    let count = channel_voice_states.count();
+
+    // count is 1 if the bot is the only one in the channel
+    if count == 1 {
+        // stop playing
+        if let Some(call_lock) = state.songbird.get(guild_id) {
+            let call = call_lock.lock().await;
+            call.queue().stop();
+        }
+        // leave the voice channel
+        state.songbird.leave(guild_id).await?;
+    }
+    Ok(())
+}
+
 pub(crate) struct Handler {
     state: State,
 }
@@ -46,6 +81,9 @@ impl Handler {
                 if message.content.contains("!delete") {
                     spawn(delete(message.0.clone(), Arc::clone(&self.state)));
                 }
+            }
+            Event::VoiceStateUpdate(update) => {
+                spawn(leave_if_alone(*update.clone(), Arc::clone(&self.state)))
             }
             _ => {}
         }

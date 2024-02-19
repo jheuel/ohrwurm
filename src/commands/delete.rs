@@ -1,9 +1,8 @@
+use crate::state::State;
 use std::{env, error::Error, num::NonZeroU64, time::Duration};
 use tokio::time::sleep;
-use tracing::info;
+use tracing::debug;
 use twilight_model::{channel::Message, id::Id};
-
-use crate::state::State;
 
 pub(crate) async fn delete(
     msg: Message,
@@ -33,7 +32,7 @@ pub(crate) async fn delete(
         .await?;
     state.http.delete_message(msg.channel_id, msg.id).await?;
     for message in messages {
-        info!("Delete message: {:?}: {:?}", message.author.name, message);
+        debug!("Delete message: {:?}: {:?}", message.author.name, message);
         state
             .http
             .delete_message(msg.channel_id, message.id)
