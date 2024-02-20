@@ -28,9 +28,9 @@ pub(crate) async fn queue(
         if queue.is_empty() {
             message.push_str("There are no tracks in the queue.\n");
         } else {
-            message.push_str("Currently playing:\n");
+            message.push_str("Next songs are:\n");
         }
-        for track in queue {
+        for track in queue.iter().take(5) {
             let map = track.typemap().read().await;
             let metadata = map.get::<MetadataMap>().unwrap();
             message.push_str(

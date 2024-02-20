@@ -24,6 +24,20 @@ pub(crate) async fn play(
         interaction.author(),
     );
 
+    let interaction_response_data = InteractionResponseDataBuilder::new()
+        .content("Adding tracks to the queue ...")
+        .flags(MessageFlags::EPHEMERAL)
+        .build();
+    let response = InteractionResponse {
+        kind: InteractionResponseType::ChannelMessageWithSource,
+        data: Some(interaction_response_data),
+    };
+    state
+        .http
+        .interaction(interaction.application_id)
+        .create_response(interaction.id, &interaction.token, &response)
+        .await?;
+
     let Some(user_id) = interaction.author_id() else {
         return Ok(());
     };
@@ -41,22 +55,6 @@ pub(crate) async fn play(
     };
 
     debug!("query: {:?}", query);
-
-    let interaction_response_data = InteractionResponseDataBuilder::new()
-        .content("Adding tracks to the queue ...")
-        .flags(MessageFlags::EPHEMERAL)
-        .build();
-
-    let response = InteractionResponse {
-        kind: InteractionResponseType::ChannelMessageWithSource,
-        data: Some(interaction_response_data),
-    };
-
-    state
-        .http
-        .interaction(interaction.application_id)
-        .create_response(interaction.id, &interaction.token, &response)
-        .await?;
 
     // handle playlist links
     let urls = if query.contains("list=") {
