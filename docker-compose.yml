@@ -8,4 +8,5 @@ services:
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
       - DISCORD_APP_ID=${DISCORD_APP_ID}
+      - ADMIN=${ADMIN}
       - RUST_LOG=info
