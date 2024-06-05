@@ -6,6 +6,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR "/app"
 
+# Cache dependencies
+COPY Cargo.toml .
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release --locked
+
+# Build
 COPY . .
 RUN cargo build --release --locked
 
