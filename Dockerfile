@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR "/app"
 
 # Cache dependencies
-COPY Cargo.toml .
+COPY Cargo.toml Cargo.lock .
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release --locked
 
