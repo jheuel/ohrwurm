@@ -105,7 +105,7 @@ pub(crate) async fn play(
         }
         _ => {
             content = format!("Added {} tracks to queue:\n", num_tracks_added);
-            for track in tracks_added.into_iter().take(num_tracks_added.max(3)) {
+            for track in tracks_added.into_iter().take(num_tracks_added.min(3)) {
                 content.push_str(&format!("{}\n", track.unwrap()));
             }
         }
