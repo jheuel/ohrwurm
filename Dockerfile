@@ -8,11 +8,13 @@ WORKDIR "/app"
 
 # Cache dependencies
 COPY Cargo.toml Cargo.lock .
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir src \
+    && echo 'fn main() { panic!("Dummy function called!"); }' > ./src/main.rs
 RUN cargo build --release --locked
 
 # Build
 COPY . .
+RUN touch src/main.rs
 RUN cargo build --release --locked
 
 # Release image
