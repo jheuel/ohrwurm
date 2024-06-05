@@ -8,7 +8,6 @@ use std::{error::Error, ops::Sub, time::Duration};
 use tokio::process::Command;
 use tracing::debug;
 use twilight_model::application::interaction::Interaction;
-use twilight_model::channel::message::MessageFlags;
 use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
 use twilight_util::builder::InteractionResponseDataBuilder;
 use url::Url;
@@ -25,8 +24,7 @@ pub(crate) async fn play(
     );
 
     let interaction_response_data = InteractionResponseDataBuilder::new()
-        .content("Adding tracks to the queue ...")
-        .flags(MessageFlags::EPHEMERAL)
+        .content(format!("Adding track(s) to queue: {}", query))
         .build();
     let response = InteractionResponse {
         kind: InteractionResponseType::ChannelMessageWithSource,
@@ -63,10 +61,17 @@ pub(crate) async fn play(
         vec![query]
     };
 
+    if let Some(call_lock) = state.songbird.get(guild_id) {
+        let call = call_lock.lock().await;
+        call.queue().resume()?;
+    }
+
+    let mut tracks_added = vec![];
     for url in urls {
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.to_string());
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
+            tracks_added.push(metadata.title.clone());
 
             if let Some(call_lock) = state.songbird.get(guild_id) {
                 let mut call = call_lock.lock().await;
@@ -88,6 +93,30 @@ pub(crate) async fn play(
             }
         }
     }
+    let mut content = String::new();
+    let num_tracks_added = tracks_added.len();
+    match num_tracks_added {
+        0 => {}
+        1 => {
+            content = format!(
+                "Added {} to queue",
+                tracks_added.first().unwrap().clone().unwrap()
+            );
+        }
+        _ => {
+            content = format!("Added {} tracks to queue:\n", num_tracks_added);
+            for track in tracks_added.into_iter().take(num_tracks_added.max(3)) {
+                content.push_str(&format!("{}\n", track.unwrap()));
+            }
+        }
+    }
+    state
+        .http
+        .interaction(interaction.application_id)
+        .update_response(&interaction.token)
+        .content(Some(&content))
+        .unwrap()
+        .await?;
 
     Ok(())
 }

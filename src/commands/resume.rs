@@ -27,7 +27,7 @@ pub(crate) async fn resume(
     }
 
     let interaction_response_data = InteractionResponseDataBuilder::new()
-        .content("Resumed the track")
+        .content("Resumed playing")
         .flags(MessageFlags::EPHEMERAL)
         .build();
 
