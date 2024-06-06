@@ -77,7 +77,7 @@ impl Handler {
     }
     pub(crate) async fn act(&self, event: Event) {
         match &event {
-            Event::MessageCreate(message) if message.content.starts_with("!") => {
+            Event::MessageCreate(message) if message.content.starts_with('!') => {
                 if message.content.contains("!delete") {
                     spawn(delete(message.0.clone(), Arc::clone(&self.state)));
                 }

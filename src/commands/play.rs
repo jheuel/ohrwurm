@@ -132,7 +132,7 @@ async fn get_playlist_urls(
     let reader = BufReader::new(output.stdout.as_slice());
     let urls = reader
         .lines()
-        .flatten()
+        .map_while(Result::ok)
         .map(|line| {
             let entry: Value = serde_json::from_str(&line).unwrap();
             entry
