@@ -1,7 +1,9 @@
 name: release
 
 on:
-  push
+  push:
+    branches:
+      - main
 
 jobs:
   release-image:
