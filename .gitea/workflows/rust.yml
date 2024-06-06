@@ -1,0 +1,66 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update
+    - run: sudo apt-get install -y cmake
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Build
+      run: cargo build --verbose
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update
+    - run: sudo apt-get install -y cmake
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+    - name: Run tests
+      run: cargo test --verbose --all-features
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update
+    - run: sudo apt-get install -y cmake
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: clippy
+    - name: Run clippy
+      run: cargo clippy
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update
+    - run: sudo apt-get install -y cmake
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: rustfmt
+    - name: Rustfmt Check
+      uses: actions-rust-lang/rustfmt@v1
+
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: sudo apt-get update
+    - run: sudo apt-get install -y cmake
+    - uses: actions/setup-python@v3
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: rustfmt
+    - uses: pre-commit/action@v3.0.1
