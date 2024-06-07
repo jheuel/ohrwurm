@@ -1,8 +1,0 @@
----
-services:
-  ohrwurm:
-    build: .
-    container_name: ohrwurm
-    restart: unless-stopped
-    env_file:
-      - .env
