@@ -1,14 +1,25 @@
-name: Rust
+name: tests
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - run: sudo apt-get update
+    - run: sudo apt-get install -y cmake
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        components: rustfmt
+    - name: Rustfmt Check
+      uses: actions-rust-lang/rustfmt@v1
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -40,18 +51,6 @@ jobs:
         components: clippy
     - name: Run clippy
       run: cargo clippy
-
-  fmt:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    - run: sudo apt-get update
-    - run: sudo apt-get install -y cmake
-    - uses: actions-rust-lang/setup-rust-toolchain@v1
-      with:
-        components: rustfmt
-    - name: Rustfmt Check
-      uses: actions-rust-lang/rustfmt@v1
 
   pre-commit:
     runs-on: ubuntu-latest
