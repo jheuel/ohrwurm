@@ -3,6 +3,7 @@ use twilight_model::{
     application::interaction::Interaction, channel::message::MessageFlags,
     http::interaction::InteractionResponse,
 };
+use twilight_util::builder::embed::EmbedBuilder;
 use twilight_util::builder::InteractionResponseDataBuilder;
 
 use crate::{metadata::MetadataMap, state::State};
@@ -35,8 +36,9 @@ pub(crate) async fn queue(
             let metadata = map.get::<MetadataMap>().unwrap();
             message.push_str(
                 format!(
-                    "* `{}",
+                    "* [{}]({})",
                     metadata.title.clone().unwrap_or("Unknown".to_string()),
+                    metadata.url,
                 )
                 .as_str(),
             );
@@ -54,12 +56,13 @@ pub(crate) async fn queue(
                 message.push_str(format!("{:02}:{:02}", minutes, seconds).as_str());
                 message.push(')');
             }
-            message.push_str("`\n");
+            message.push('\n');
         }
 
+        let embeds = vec![EmbedBuilder::new().description(&message).build()];
         let interaction_response_data = InteractionResponseDataBuilder::new()
-            .content(&message)
             .flags(MessageFlags::EPHEMERAL)
+            .embeds(embeds)
             .build();
 
         let response = InteractionResponse {
