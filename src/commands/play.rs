@@ -9,6 +9,7 @@ use tokio::process::Command;
 use tracing::debug;
 use twilight_model::application::interaction::Interaction;
 use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
+use twilight_util::builder::embed::EmbedBuilder;
 use twilight_util::builder::InteractionResponseDataBuilder;
 use url::Url;
 
@@ -23,9 +24,13 @@ pub(crate) async fn play(
         interaction.author(),
     );
 
-    let interaction_response_data = InteractionResponseDataBuilder::new()
-        .content(format!("Adding track(s) to queue: {}", query))
-        .build();
+    let content = format!("Adding track(s) to the queue: {}", query);
+    let yellow = 0xFE_E7_5C;
+    let embeds = vec![EmbedBuilder::new()
+        .description(content)
+        .color(yellow)
+        .build()];
+    let interaction_response_data = InteractionResponseDataBuilder::new().embeds(embeds).build();
     let response = InteractionResponse {
         kind: InteractionResponseType::ChannelMessageWithSource,
         data: Some(interaction_response_data),
@@ -54,12 +59,7 @@ pub(crate) async fn play(
 
     debug!("query: {:?}", query);
 
-    // handle playlist links
-    let urls = if query.contains("list=") {
-        get_playlist_urls(query).await?
-    } else {
-        vec![query]
-    };
+    let urls = get_playlist_urls(query).await?;
 
     if let Some(call_lock) = state.songbird.get(guild_id) {
         let call = call_lock.lock().await;
@@ -71,7 +71,7 @@ pub(crate) async fn play(
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.to_string());
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
-            tracks_added.push(metadata.title.clone());
+            tracks_added.push((url.clone(), metadata.title.clone()));
 
             if let Some(call_lock) = state.songbird.get(guild_id) {
                 let mut call = call_lock.lock().await;
@@ -89,6 +89,7 @@ pub(crate) async fn play(
                 x.insert::<MetadataMap>(Metadata {
                     title: metadata.title,
                     duration: metadata.duration,
+                    url,
                 });
             }
         }
@@ -98,23 +99,31 @@ pub(crate) async fn play(
     match num_tracks_added {
         0 => {}
         1 => {
-            content = format!(
-                "Added \"{}\" to queue",
-                tracks_added.first().unwrap().clone().unwrap()
-            );
+            let track = tracks_added.first().unwrap().clone();
+            let title = track.1.unwrap();
+            let url = track.0;
+            content = format!("Added [{}]({}) to the queue", title, url);
         }
         _ => {
-            content = format!("Added {} tracks to queue:\n", num_tracks_added);
+            content = format!("Added {} tracks to the queue:\n", num_tracks_added);
             for track in tracks_added.into_iter().take(num_tracks_added.min(3)) {
-                content.push_str(&format!("  \"{}\"\n", track.unwrap()));
+                let title = track.1.unwrap();
+                let url = track.0;
+                content.push_str(&format!("  \"[{}]({})\"\n", title, url));
             }
         }
     }
+
+    let blurple = 0x58_65_F2;
+    let embeds = vec![EmbedBuilder::new()
+        .description(content)
+        .color(blurple)
+        .build()];
     state
         .http
         .interaction(interaction.application_id)
         .update_response(&interaction.token)
-        .content(Some(&content))
+        .embeds(Some(&embeds))
         .unwrap()
         .await?;
 
