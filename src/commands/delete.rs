@@ -9,14 +9,14 @@ pub(crate) async fn delete(
     state: State,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     let admin = env::var("ADMIN")?.parse::<u64>()?;
-    if msg.author.id != Id::from(NonZeroU64::new(admin).unwrap()) {
+    if msg.author.id != Id::from(NonZeroU64::new(admin).expect("Could not get author id")) {
         return Ok(());
     }
     let n = msg
         .content
         .split(' ')
         .last()
-        .unwrap()
+        .unwrap_or("1")
         .parse::<u16>()
         .unwrap_or(1);
     if n > 100 {

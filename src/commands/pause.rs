@@ -1,14 +1,14 @@
 use crate::state::State;
 use std::error::Error;
 use twilight_model::{
-    application::interaction::Interaction,
     channel::message::MessageFlags,
+    gateway::payload::incoming::InteractionCreate,
     http::interaction::{InteractionResponse, InteractionResponseType},
 };
 use twilight_util::builder::InteractionResponseDataBuilder;
 
 pub(crate) async fn pause(
-    interaction: Interaction,
+    interaction: Box<InteractionCreate>,
     state: State,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     tracing::debug!(

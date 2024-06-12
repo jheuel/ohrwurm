@@ -2,8 +2,8 @@ use crate::state::State;
 use std::error::Error;
 use tracing::debug;
 use twilight_model::{
-    application::interaction::Interaction,
     channel::message::MessageFlags,
+    gateway::payload::incoming::InteractionCreate,
     http::interaction::{InteractionResponse, InteractionResponseType},
     id::{
         marker::{GuildMarker, UserMarker},
@@ -42,7 +42,7 @@ pub(crate) async fn join_channel(
 }
 
 pub(crate) async fn join(
-    interaction: Interaction,
+    interaction: Box<InteractionCreate>,
     state: State,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     debug!(

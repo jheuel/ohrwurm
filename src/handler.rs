@@ -1,3 +1,4 @@
+use crate::commands::queue::{build_action_row, build_queue_embeds, TRACKS_PER_PAGE};
 use crate::commands::{delete, join, leave, pause, play, queue, resume, stop};
 use crate::state::State;
 use futures::Future;
@@ -5,19 +6,23 @@ use std::error::Error;
 use std::sync::Arc;
 use tracing::debug;
 use twilight_gateway::Event;
-use twilight_model::application::interaction::application_command::CommandOptionValue;
-use twilight_model::application::interaction::{Interaction, InteractionData};
+use twilight_model::application::interaction::application_command::{
+    CommandData, CommandOptionValue,
+};
+use twilight_model::application::interaction::InteractionData;
 use twilight_model::gateway::payload::incoming::VoiceStateUpdate;
+use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
+use twilight_util::builder::InteractionResponseDataBuilder;
 
 #[derive(Debug)]
 enum InteractionCommand {
-    Play(Interaction, String),
-    Stop(Interaction),
-    Pause(Interaction),
-    Resume(Interaction),
-    Leave(Interaction),
-    Join(Interaction),
-    Queue(Interaction),
+    Play(String),
+    Stop,
+    Pause,
+    Resume,
+    Leave,
+    Join,
+    Queue,
     NotImplemented,
 }
 
@@ -75,80 +80,121 @@ impl Handler {
     pub(crate) fn new(state: State) -> Self {
         Self { state }
     }
-    pub(crate) async fn act(&self, event: Event) {
-        match &event {
+    pub(crate) async fn act(&self, event: Event) -> anyhow::Result<()> {
+        match event {
             Event::MessageCreate(message) if message.content.starts_with('!') => {
                 if message.content.contains("!delete") {
                     spawn(delete(message.0.clone(), Arc::clone(&self.state)));
                 }
+                Ok(())
             }
             Event::VoiceStateUpdate(update) => {
-                spawn(leave_if_alone(*update.clone(), Arc::clone(&self.state)))
+                spawn(leave_if_alone(*update.clone(), Arc::clone(&self.state)));
+                Ok(())
             }
-            _ => {}
-        }
-
-        let interaction_command = match event {
             Event::InteractionCreate(interaction) => {
-                debug!("interaction: {:?}", &interaction);
+                tracing::info!("interaction: {:?}", &interaction);
                 match &interaction.data {
                     Some(InteractionData::ApplicationCommand(command)) => {
-                        debug!("command: {:?}", command);
-                        match command.name.as_str() {
-                            "play" => {
-                                if let Some(query_option) =
-                                    command.options.iter().find(|opt| opt.name == "query")
-                                {
-                                    if let CommandOptionValue::String(query) = &query_option.value {
-                                        InteractionCommand::Play(
-                                            interaction.0.clone(),
-                                            query.clone(),
-                                        )
-                                    } else {
-                                        InteractionCommand::NotImplemented
-                                    }
-                                } else {
-                                    InteractionCommand::NotImplemented
-                                }
+                        let interaction_command = parse_interaction_command(command);
+                        debug!("{:?}", interaction_command);
+                        match interaction_command {
+                            InteractionCommand::Play(query) => {
+                                spawn(play(interaction, Arc::clone(&self.state), query))
                             }
-                            "stop" => InteractionCommand::Stop(interaction.0.clone()),
-                            "pause" => InteractionCommand::Pause(interaction.0.clone()),
-                            "resume" => InteractionCommand::Resume(interaction.0.clone()),
-                            "leave" => InteractionCommand::Leave(interaction.0.clone()),
-                            "join" => InteractionCommand::Join(interaction.0.clone()),
-                            "queue" => InteractionCommand::Queue(interaction.0.clone()),
-                            _ => InteractionCommand::NotImplemented,
+                            InteractionCommand::Stop => {
+                                spawn(stop(interaction, Arc::clone(&self.state)))
+                            }
+                            InteractionCommand::Pause => {
+                                spawn(pause(interaction, Arc::clone(&self.state)))
+                            }
+                            InteractionCommand::Resume => {
+                                spawn(resume(interaction, Arc::clone(&self.state)))
+                            }
+                            InteractionCommand::Leave => {
+                                spawn(leave(interaction, Arc::clone(&self.state)))
+                            }
+                            InteractionCommand::Join => {
+                                spawn(join(interaction, Arc::clone(&self.state)))
+                            }
+                            InteractionCommand::Queue => {
+                                spawn(queue(interaction, Arc::clone(&self.state)))
+                            }
+                            _ => {}
+                        }
+                        Ok(())
+                    }
+                    Some(InteractionData::MessageComponent(data)) => {
+                        tracing::info!("message component: {:?}", data);
+
+                        if !data.custom_id.starts_with("page:") {
+                            return Ok(());
+                        }
+                        let page = data
+                            .custom_id
+                            .trim_start_matches("page:")
+                            .parse::<usize>()
+                            .unwrap_or(0);
+                        tracing::info!("page: {:?}", page);
+
+                        if let Some(guild_id) = interaction.guild_id {
+                            let mut queue = Vec::new();
+                            if let Some(call_lock) = self.state.songbird.get(guild_id) {
+                                let call = call_lock.lock().await;
+                                queue = call.queue().current_queue();
+                            }
+                            let embeds = build_queue_embeds(&queue, page).await;
+                            let action_row = build_action_row(page, queue.len() / TRACKS_PER_PAGE);
+
+                            let interaction_response_data = InteractionResponseDataBuilder::new()
+                                .embeds(embeds)
+                                .components(action_row)
+                                .build();
+                            let response = InteractionResponse {
+                                kind: InteractionResponseType::UpdateMessage,
+                                data: Some(interaction_response_data),
+                            };
+                            self.state
+                                .http
+                                .interaction(interaction.application_id)
+                                .create_response(interaction.id, &interaction.token, &response)
+                                .await?;
+                            Ok(())
+                        } else {
+                            Ok(())
                         }
                     }
-                    _ => InteractionCommand::NotImplemented,
+                    _ => Ok(()),
                 }
             }
-            _ => InteractionCommand::NotImplemented,
-        };
-        debug!("{:?}", interaction_command);
-        match interaction_command {
-            InteractionCommand::Play(interaction, query) => {
-                spawn(play(interaction, Arc::clone(&self.state), query))
+            event => {
+                tracing::info!("unhandled event: {:?}", event);
+                Ok(())
             }
-            InteractionCommand::Stop(interaction) => {
-                spawn(stop(interaction, Arc::clone(&self.state)))
+        }
+    }
+}
+
+fn parse_interaction_command(command: &CommandData) -> InteractionCommand {
+    debug!("command: {:?}", command);
+    match command.name.as_str() {
+        "play" => {
+            if let Some(query_option) = command.options.iter().find(|opt| opt.name == "query") {
+                if let CommandOptionValue::String(query) = &query_option.value {
+                    InteractionCommand::Play(query.clone())
+                } else {
+                    InteractionCommand::NotImplemented
+                }
+            } else {
+                InteractionCommand::NotImplemented
             }
-            InteractionCommand::Pause(interaction) => {
-                spawn(pause(interaction, Arc::clone(&self.state)))
-            }
-            InteractionCommand::Resume(interaction) => {
-                spawn(resume(interaction, Arc::clone(&self.state)))
-            }
-            InteractionCommand::Leave(interaction) => {
-                spawn(leave(interaction, Arc::clone(&self.state)))
-            }
-            InteractionCommand::Join(interaction) => {
-                spawn(join(interaction, Arc::clone(&self.state)))
-            }
-            InteractionCommand::Queue(interaction) => {
-                spawn(queue(interaction, Arc::clone(&self.state)))
-            }
-            _ => {}
-        };
+        }
+        "stop" => InteractionCommand::Stop,
+        "pause" => InteractionCommand::Pause,
+        "resume" => InteractionCommand::Resume,
+        "leave" => InteractionCommand::Leave,
+        "join" => InteractionCommand::Join,
+        "queue" => InteractionCommand::Queue,
+        _ => InteractionCommand::NotImplemented,
     }
 }

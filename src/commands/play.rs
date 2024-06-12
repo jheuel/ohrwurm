@@ -1,20 +1,55 @@
+use crate::colors;
 use crate::commands::join::join_channel;
 use crate::metadata::{Metadata, MetadataMap};
 use crate::state::State;
-use serde_json::Value;
+
+use serde::{Deserialize, Serialize};
 use songbird::input::{Compose, YoutubeDl};
 use std::io::{BufRead, BufReader};
 use std::{error::Error, ops::Sub, time::Duration};
 use tokio::process::Command;
 use tracing::debug;
-use twilight_model::application::interaction::Interaction;
+use twilight_model::channel::message::MessageFlags;
+use twilight_model::gateway::payload::incoming::InteractionCreate;
 use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
 use twilight_util::builder::embed::EmbedBuilder;
 use twilight_util::builder::InteractionResponseDataBuilder;
 use url::Url;
 
+#[derive(Debug, Serialize, Deserialize)]
+struct YouTubeTrack {
+    url: String,
+    title: String,
+    channel: String,
+    playlist: String,
+    playlist_id: String,
+    duration_string: String,
+}
+
+fn build_playlist_url(playlist_id: &str) -> String {
+    format!("https://www.youtube.com/playlist?list={}", playlist_id)
+}
+
+async fn get_tracks(
+    url: String,
+) -> Result<Vec<YouTubeTrack>, Box<dyn Error + Send + Sync + 'static>> {
+    let output = Command::new("yt-dlp")
+        .args(vec![&url, "--flat-playlist", "-j"])
+        .output()
+        .await?;
+
+    let reader = BufReader::new(output.stdout.as_slice());
+    let tracks: Vec<YouTubeTrack> = reader
+        .lines()
+        .map_while(Result::ok)
+        .flat_map(|line| serde_json::from_str(&line))
+        .collect();
+    tracing::debug!("tracks: {:?}", tracks);
+    Ok(tracks)
+}
+
 pub(crate) async fn play(
-    interaction: Interaction,
+    interaction: Box<InteractionCreate>,
     state: State,
     query: String,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
@@ -25,14 +60,16 @@ pub(crate) async fn play(
     );
 
     let content = format!("Adding track(s) to the queue: {}", query);
-    let yellow = 0xFE_E7_5C;
     let embeds = vec![EmbedBuilder::new()
         .description(content)
-        .color(yellow)
+        .color(colors::YELLOW)
         .build()];
-    let interaction_response_data = InteractionResponseDataBuilder::new().embeds(embeds).build();
+    let interaction_response_data = InteractionResponseDataBuilder::new()
+        .flags(MessageFlags::LOADING)
+        .embeds(embeds)
+        .build();
     let response = InteractionResponse {
-        kind: InteractionResponseType::ChannelMessageWithSource,
+        kind: InteractionResponseType::DeferredChannelMessageWithSource,
         data: Some(interaction_response_data),
     };
     state
@@ -59,7 +96,26 @@ pub(crate) async fn play(
 
     debug!("query: {:?}", query);
 
-    let urls = get_playlist_urls(query).await?;
+    let tracks = get_tracks(query).await?;
+
+    if tracks.len() > 1 {
+        let first_track = tracks.first().unwrap();
+        let content = format!(
+            "Adding playlist [{}]({})",
+            first_track.playlist,
+            build_playlist_url(&first_track.playlist_id)
+        );
+        let embeds = vec![EmbedBuilder::new()
+            .description(content)
+            .color(colors::BLURPLE)
+            .build()];
+        state
+            .http
+            .interaction(interaction.application_id)
+            .update_response(&interaction.token)
+            .embeds(Some(&embeds))?
+            .await?;
+    }
 
     if let Some(call_lock) = state.songbird.get(guild_id) {
         let call = call_lock.lock().await;
@@ -67,7 +123,9 @@ pub(crate) async fn play(
     }
 
     let mut tracks_added = vec![];
-    for url in urls {
+    for track in &tracks {
+        tracing::debug!("track: {:?}", track);
+        let url = track.url.clone();
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.to_string());
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
@@ -99,59 +157,38 @@ pub(crate) async fn play(
     match num_tracks_added {
         0 => {}
         1 => {
-            let track = tracks_added.first().unwrap().clone();
-            let title = track.1.unwrap();
-            let url = track.0;
+            let (title, url) = if let Some(track) = tracks_added.first() {
+                let track = track.clone();
+                (track.1.unwrap_or("Unknown".to_string()), track.0)
+            } else {
+                ("Unknown".to_string(), "".to_string())
+            };
             content = format!("Added [{}]({}) to the queue", title, url);
         }
         _ => {
-            content = format!("Added {} tracks to the queue:\n", num_tracks_added);
-            for track in tracks_added.into_iter().take(num_tracks_added.min(3)) {
-                let title = track.1.unwrap();
-                let url = track.0;
-                content.push_str(&format!("  \"[{}]({})\"\n", title, url));
-            }
+            let first_track = tracks.first().unwrap();
+            content.push_str(&format!(
+                "Adding playlist: [{}]({})\n",
+                &first_track.playlist,
+                build_playlist_url(&first_track.playlist_id)
+            ));
+            content.push_str(&format!(
+                "Added {} tracks to the queue:\n",
+                num_tracks_added
+            ));
         }
     }
 
-    let blurple = 0x58_65_F2;
     let embeds = vec![EmbedBuilder::new()
         .description(content)
-        .color(blurple)
+        .color(colors::BLURPLE)
         .build()];
     state
         .http
         .interaction(interaction.application_id)
         .update_response(&interaction.token)
-        .embeds(Some(&embeds))
-        .unwrap()
+        .embeds(Some(&embeds))?
         .await?;
 
     Ok(())
-}
-
-async fn get_playlist_urls(
-    url: String,
-) -> Result<Vec<String>, Box<dyn Error + Send + Sync + 'static>> {
-    let output = Command::new("yt-dlp")
-        .args(vec![&url, "--flat-playlist", "-j"])
-        .output()
-        .await?;
-
-    let reader = BufReader::new(output.stdout.as_slice());
-    let urls = reader
-        .lines()
-        .map_while(Result::ok)
-        .map(|line| {
-            let entry: Value = serde_json::from_str(&line).unwrap();
-            entry
-                .get("webpage_url")
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string()
-        })
-        .collect();
-
-    Ok(urls)
 }

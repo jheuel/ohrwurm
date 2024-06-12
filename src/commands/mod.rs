@@ -10,7 +10,7 @@ pub(crate) use pause::pause;
 mod play;
 pub(crate) use play::play;
 
-mod queue;
+pub(crate) mod queue;
 pub(crate) use queue::queue;
 
 mod resume;
