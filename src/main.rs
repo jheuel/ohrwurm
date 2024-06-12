@@ -1,9 +1,11 @@
 mod handler;
 use handler::Handler;
+mod colors;
 mod commands;
 mod metadata;
 mod signal;
 mod state;
+
 use crate::commands::get_chat_commands;
 use dotenv::dotenv;
 use futures::StreamExt;
@@ -118,7 +120,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 state.standby.process(&event);
                 state.songbird.process(&event).await;
 
-                handler.act(event).await;
+                handler.act(event).await?;
             }
         }
     }

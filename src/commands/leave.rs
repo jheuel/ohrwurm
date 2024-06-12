@@ -1,9 +1,9 @@
 use crate::state::State;
 use std::error::Error;
-use twilight_model::application::interaction::Interaction;
+use twilight_model::gateway::payload::incoming::InteractionCreate;
 
 pub(crate) async fn leave(
-    interaction: Interaction,
+    interaction: Box<InteractionCreate>,
     state: State,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     tracing::debug!(
