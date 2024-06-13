@@ -7,6 +7,9 @@ pub(crate) use leave::leave;
 mod pause;
 pub(crate) use pause::pause;
 
+mod skip;
+pub(crate) use skip::skip;
+
 mod play;
 pub(crate) use play::play;
 
