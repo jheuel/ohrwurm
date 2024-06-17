@@ -1,5 +1,5 @@
 use crate::commands::queue::{build_action_row, build_queue_embeds, TRACKS_PER_PAGE};
-use crate::commands::{delete, join, leave, pause, play, queue, resume, stop};
+use crate::commands::{delete, join, leave, loop_queue, pause, play, queue, resume, skip, stop};
 use crate::state::State;
 use futures::Future;
 use std::error::Error;
@@ -19,6 +19,8 @@ enum InteractionCommand {
     Play(String),
     Stop,
     Pause,
+    Skip,
+    Loop,
     Resume,
     Leave,
     Join,
@@ -108,6 +110,12 @@ impl Handler {
                             InteractionCommand::Pause => {
                                 spawn(pause(interaction, Arc::clone(&self.state)))
                             }
+                            InteractionCommand::Skip => {
+                                spawn(skip(interaction, Arc::clone(&self.state)))
+                            }
+                            InteractionCommand::Loop => {
+                                spawn(loop_queue(interaction, Arc::clone(&self.state)))
+                            }
                             InteractionCommand::Resume => {
                                 spawn(resume(interaction, Arc::clone(&self.state)))
                             }
@@ -191,6 +199,8 @@ fn parse_interaction_command(command: &CommandData) -> InteractionCommand {
         }
         "stop" => InteractionCommand::Stop,
         "pause" => InteractionCommand::Pause,
+        "skip" => InteractionCommand::Skip,
+        "loop" => InteractionCommand::Loop,
         "resume" => InteractionCommand::Resume,
         "leave" => InteractionCommand::Leave,
         "join" => InteractionCommand::Join,

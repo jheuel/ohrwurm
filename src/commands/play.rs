@@ -5,8 +5,10 @@ use crate::state::State;
 
 use serde::{Deserialize, Serialize};
 use songbird::input::{Compose, YoutubeDl};
+use songbird::tracks::Track;
 use std::io::{BufRead, BufReader};
-use std::{error::Error, ops::Sub, time::Duration};
+use std::ops::Sub;
+use std::{error::Error, time::Duration};
 use tokio::process::Command;
 use tracing::debug;
 use twilight_model::channel::message::MessageFlags;
@@ -18,11 +20,12 @@ use url::Url;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct YouTubeTrack {
-    url: String,
+    url: Option<String>,
+    original_url: Option<String>,
     title: String,
     channel: String,
-    playlist: String,
-    playlist_id: String,
+    playlist: Option<String>,
+    playlist_id: Option<String>,
     duration_string: String,
 }
 
@@ -102,8 +105,16 @@ pub(crate) async fn play(
         let first_track = tracks.first().unwrap();
         let content = format!(
             "Adding playlist [{}]({})",
-            first_track.playlist,
-            build_playlist_url(&first_track.playlist_id)
+            first_track
+                .playlist
+                .clone()
+                .unwrap_or("Unknown".to_string()),
+            build_playlist_url(
+                &first_track
+                    .playlist_id
+                    .clone()
+                    .unwrap_or("Unknown".to_string())
+            )
         );
         let embeds = vec![EmbedBuilder::new()
             .description(content)
@@ -125,8 +136,16 @@ pub(crate) async fn play(
     let mut tracks_added = vec![];
     for track in &tracks {
         tracing::debug!("track: {:?}", track);
-        let url = track.url.clone();
-        let mut src = YoutubeDl::new(reqwest::Client::new(), url.to_string());
+        let url = track.url.clone().or(track.original_url.clone()).ok_or("")?;
+        let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
+        let s = src.clone();
+        let track: Track = src.clone().into();
+        state
+            .tracks
+            .entry(guild_id)
+            .or_default()
+            .insert(track.uuid, s);
+
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
             tracks_added.push((url.clone(), metadata.title.clone()));
@@ -134,7 +153,7 @@ pub(crate) async fn play(
             if let Some(call_lock) = state.songbird.get(guild_id) {
                 let mut call = call_lock.lock().await;
                 let handle = call.enqueue_with_preload(
-                    src.into(),
+                    track,
                     metadata.duration.map(|duration| -> Duration {
                         if duration.as_secs() > 5 {
                             duration.sub(Duration::from_secs(5))
@@ -169,8 +188,16 @@ pub(crate) async fn play(
             let first_track = tracks.first().unwrap();
             content.push_str(&format!(
                 "Adding playlist: [{}]({})\n",
-                &first_track.playlist,
-                build_playlist_url(&first_track.playlist_id)
+                &first_track
+                    .playlist
+                    .clone()
+                    .unwrap_or("Unknown".to_string()),
+                build_playlist_url(
+                    &first_track
+                        .playlist_id
+                        .clone()
+                        .unwrap_or("Unknown".to_string())
+                )
             ));
             content.push_str(&format!(
                 "Added {} tracks to the queue:\n",
@@ -191,4 +218,24 @@ pub(crate) async fn play(
         .await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_get_tracks() {
+        let urls = [
+            "https://www.youtube.com/playlist?list=PLFxxhcEeloYa1OlnWD6UgxlVQKJH5i_0p",
+            "https://music.youtube.com/watch?v=RO75ZzqUOJw",
+            "https://www.youtube.com/watch?v=qVHyl0P_P-M",
+            "https://www.youtube.com/watch?v=34CZjsEI1yU",
+        ];
+        for url in urls.iter() {
+            println!("url: {:?}", url);
+            let tracks = get_tracks(url.to_string()).await.unwrap();
+            assert!(!tracks.is_empty());
+        }
+    }
 }
