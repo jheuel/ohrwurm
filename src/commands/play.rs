@@ -138,13 +138,13 @@ pub(crate) async fn play(
         tracing::debug!("track: {:?}", track);
         let url = track.url.clone().or(track.original_url.clone()).ok_or("")?;
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
-        let s = src.clone();
-        let track: Track = src.clone().into();
-        state
-            .tracks
-            .entry(guild_id)
-            .or_default()
-            .insert(track.uuid, s);
+        let src_copy = src.clone();
+        let track: Track = src_copy.into();
+        //state
+        //    .tracks
+        //    .entry(guild_id)
+        //    .or_default()
+        //    .insert(track.uuid, src);
 
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
@@ -167,6 +167,7 @@ pub(crate) async fn play(
                     title: metadata.title,
                     duration: metadata.duration,
                     url,
+                    src,
                 });
             }
         }

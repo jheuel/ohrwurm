@@ -27,7 +27,7 @@ pub(crate) async fn skip(
     }
 
     let interaction_response_data = InteractionResponseDataBuilder::new()
-        .content("Skipped the next track")
+        .content("Skipped a track")
         .build();
 
     let response = InteractionResponse {

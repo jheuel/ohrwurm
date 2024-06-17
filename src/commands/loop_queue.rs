@@ -1,6 +1,6 @@
-use crate::state::{State, StateRef};
+use crate::metadata::MetadataMap;
+use crate::state::{Settings, State, StateRef};
 use async_trait::async_trait;
-use songbird::input::Compose;
 use songbird::{Event, EventContext, EventHandler, TrackEvent};
 use std::ops::Sub;
 use std::time::Duration;
@@ -29,12 +29,21 @@ pub(crate) async fn loop_queue(
         return Ok(());
     };
 
-    let looping = if let Some(mut settings) = state.guild_settings.get_mut(&guild_id) {
+    state
+        .guild_settings
+        .entry(guild_id)
+        .or_insert_with(|| Settings { loop_queue: false });
+
+    state.guild_settings.entry(guild_id).and_modify(|settings| {
         settings.loop_queue = !settings.loop_queue;
-        settings.loop_queue
-    } else {
-        false
-    };
+        println!("loop_queue: {}", settings.loop_queue);
+    });
+
+    let looping = state
+        .guild_settings
+        .get(&guild_id)
+        .expect("Cannot get loop state")
+        .loop_queue;
 
     if let Some(call_lock) = state.songbird.get(guild_id) {
         let mut call = call_lock.lock().await;
@@ -47,10 +56,11 @@ pub(crate) async fn loop_queue(
         );
     }
 
-    let mut message = "I'm not looping anymore!".to_string();
-    if looping {
-        message = "I'm now looping the current queue!".to_string();
-    }
+    let message = if looping {
+        "I'm now looping the current queue!".to_string()
+    } else {
+        "I'm not looping anymore!".to_string()
+    };
 
     let interaction_response_data = InteractionResponseDataBuilder::new()
         .content(message)
@@ -91,29 +101,28 @@ impl EventHandler for TrackEndNotifier {
             return None;
         };
         let (_, track_handle) = track_list.first()?;
-        if let Some(yt) = self
-            .state
-            .tracks
-            .get(&self.guild_id)
-            .unwrap()
-            .get(&track_handle.uuid())
-        {
-            let mut src = yt.clone();
-            if let Ok(metadata) = src.aux_metadata().await {
-                if let Some(call_lock) = self.state.songbird.get(self.guild_id) {
-                    let mut call = call_lock.lock().await;
-                    call.enqueue_with_preload(
-                        src.into(),
-                        metadata.duration.map(|duration| -> Duration {
-                            if duration.as_secs() > 5 {
-                                duration.sub(Duration::from_secs(5))
-                            } else {
-                                duration
-                            }
-                        }),
-                    );
-                }
-            }
+        if let Some(call_lock) = self.state.songbird.get(self.guild_id) {
+            let mut call = call_lock.lock().await;
+
+            // get metadata from finished track
+            let old_typemap_lock = track_handle.typemap().read().await;
+            let old_metadata = old_typemap_lock.get::<MetadataMap>().unwrap();
+
+            // enqueue track
+            let handle = call.enqueue_with_preload(
+                old_metadata.src.clone().into(),
+                old_metadata.duration.map(|duration| -> Duration {
+                    if duration.as_secs() > 5 {
+                        duration.sub(Duration::from_secs(5))
+                    } else {
+                        duration
+                    }
+                }),
+            );
+
+            // insert metadata into new track
+            let mut new_typemap = handle.typemap().write().await;
+            new_typemap.insert::<MetadataMap>(old_metadata.clone());
         }
         None
     }
