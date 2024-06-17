@@ -35,12 +35,14 @@ pub(crate) fn get_chat_commands() -> Vec<twilight_model::application::command::C
     vec![
         CommandBuilder::new("join", "Join the channel", CommandType::ChatInput).build(),
         CommandBuilder::new("leave", "Leave the channel", CommandType::ChatInput).build(),
+        CommandBuilder::new("loop", "Loop queue", CommandType::ChatInput).build(),
+        CommandBuilder::new("skip", "Skip track", CommandType::ChatInput).build(),
+        CommandBuilder::new("queue", "Print track queue", CommandType::ChatInput).build(),
+        CommandBuilder::new("stop", "Stop playing", CommandType::ChatInput).build(),
         CommandBuilder::new("pause", "Pause playing", CommandType::ChatInput).build(),
+        CommandBuilder::new("resume", "Resume playing", CommandType::ChatInput).build(),
         CommandBuilder::new("play", "Add a song to the queue", CommandType::ChatInput)
             .option(StringBuilder::new("query", "URL of a song").required(true))
             .build(),
-        CommandBuilder::new("queue", "Print track queue", CommandType::ChatInput).build(),
-        CommandBuilder::new("resume", "Resume playing", CommandType::ChatInput).build(),
-        CommandBuilder::new("stop", "Stop playing", CommandType::ChatInput).build(),
     ]
 }
