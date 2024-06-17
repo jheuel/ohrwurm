@@ -10,6 +10,9 @@ pub(crate) use pause::pause;
 mod skip;
 pub(crate) use skip::skip;
 
+mod loop_queue;
+pub(crate) use loop_queue::loop_queue;
+
 mod play;
 pub(crate) use play::play;
 

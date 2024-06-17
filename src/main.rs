@@ -77,6 +77,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 cache,
                 songbird,
                 standby: Standby::new(),
+                guild_settings: Default::default(),
+                tracks: Default::default(),
             }),
         )
     };
