@@ -56,6 +56,7 @@ async fn get_tracks(
             if stderr.contains("YouTube said: The playlist does not exist.") {
                 return Err("YouTube said: The playlist does not exist.".into());
             }
+            return Err(stderr.into());
         }
         return Err("No tracks found".into());
     }
