@@ -147,8 +147,10 @@ impl Handler {
                                 let call = call_lock.lock().await;
                                 queue = call.queue().current_queue();
                             }
+                            let n_pages = queue.len() / TRACKS_PER_PAGE;
+                            let page = page.min(n_pages).max(0);
                             let embeds = build_queue_embeds(&queue, page).await;
-                            let action_row = build_action_row(page, queue.len() / TRACKS_PER_PAGE);
+                            let action_row = build_action_row(page, n_pages);
 
                             let interaction_response_data = InteractionResponseDataBuilder::new()
                                 .embeds(embeds)

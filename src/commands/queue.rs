@@ -70,9 +70,6 @@ pub(crate) async fn build_queue_embeds(queue: &[TrackHandle], page: usize) -> Ve
 }
 
 pub(crate) fn build_action_row(page: usize, max_pages: usize) -> Vec<Component> {
-    if max_pages == 0 {
-        return Vec::new();
-    }
     vec![Component::ActionRow(ActionRow {
         components: vec![
             Component::Button(Button {
@@ -84,6 +81,16 @@ pub(crate) fn build_action_row(page: usize, max_pages: usize) -> Vec<Component> 
                 }),
                 url: None,
                 disabled: page == 0,
+            }),
+            Component::Button(Button {
+                custom_id: Some(format!("page:{}", page)),
+                style: ButtonStyle::Primary,
+                label: Some("Refresh".to_string()),
+                emoji: Some(ReactionType::Unicode {
+                    name: "🔄".to_string(),
+                }),
+                url: None,
+                disabled: false,
             }),
             Component::Button(Button {
                 custom_id: Some(format!("page:{}", page + 1)),
