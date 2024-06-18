@@ -11,6 +11,9 @@ use std::ops::Sub;
 use std::{error::Error, time::Duration};
 use tokio::process::Command;
 use tracing::debug;
+use twilight_model::channel::message::embed::{
+    EmbedAuthor, EmbedField, EmbedFooter, EmbedThumbnail,
+};
 use twilight_model::channel::message::MessageFlags;
 use twilight_model::gateway::payload::incoming::InteractionCreate;
 use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
@@ -162,17 +165,35 @@ pub(crate) async fn play(
         call.queue().resume()?;
     }
 
+    struct TrackType {
+        url: String,
+        title: Option<String>,
+        duration_string: String,
+        channel: String,
+        thumbnail: Option<String>,
+    }
+
     let mut tracks_added = vec![];
-    for track in &tracks {
-        tracing::debug!("track: {:?}", track);
-        let url = track.url.clone().or(track.original_url.clone()).ok_or("")?;
+    for yttrack in &tracks {
+        tracing::debug!("track: {:?}", yttrack);
+        let url = yttrack
+            .url
+            .clone()
+            .or(yttrack.original_url.clone())
+            .ok_or("")?;
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
         let src_copy = src.clone();
         let track: Track = src_copy.into();
 
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
-            tracks_added.push((url.clone(), metadata.title.clone()));
+            tracks_added.push(TrackType {
+                url: url.clone(),
+                title: metadata.title.clone(),
+                duration_string: yttrack.duration_string.clone(),
+                channel: yttrack.channel.clone(),
+                thumbnail: metadata.thumbnail.clone(),
+            });
 
             if let Some(call_lock) = state.songbird.get(guild_id) {
                 let mut call = call_lock.lock().await;
@@ -198,16 +219,58 @@ pub(crate) async fn play(
     }
     let mut content = String::new();
     let num_tracks_added = tracks_added.len();
-    match num_tracks_added {
-        0 => {}
+    let embeds = match num_tracks_added {
+        0 => {
+            vec![]
+        }
         1 => {
-            let (title, url) = if let Some(track) = tracks_added.first() {
-                let track = track.clone();
-                (track.1.unwrap_or("Unknown".to_string()), track.0)
-            } else {
-                ("Unknown".to_string(), "".to_string())
-            };
-            content = format!("Added [{}]({}) to the queue", title, url);
+            let track = tracks_added.first().unwrap();
+
+            let host = Url::parse(&track.url)?;
+            let host = host
+                .host_str()
+                .unwrap_or_default()
+                .trim_start_matches("www.");
+            let mut embed = EmbedBuilder::new()
+                .author(EmbedAuthor {
+                    name: "🔊 Added to queue".to_string(),
+                    icon_url: None,
+                    proxy_icon_url: None,
+                    url: None,
+                })
+                .title(track.title.clone().unwrap_or("Unknown".to_string()))
+                .url(track.url.clone())
+                .color(colors::BLURPLE)
+                .footer(EmbedFooter {
+                    text: format!("Streaming from {}", host),
+                    icon_url: Some(format!(
+                        "https://www.google.com/s2/favicons?domain={}",
+                        host
+                    )),
+                    proxy_icon_url: None,
+                })
+                .field(EmbedField {
+                    inline: true,
+                    name: "Duration".to_string(),
+                    value: track.duration_string.clone(),
+                })
+                .field(EmbedField {
+                    inline: true,
+                    name: "Channel".to_string(),
+                    value: track.channel.clone(),
+                })
+                .build();
+
+            if let Some(thumbnail) = &track.thumbnail {
+                embed.thumbnail = Some(EmbedThumbnail {
+                    height: None,
+                    proxy_url: None,
+                    url: thumbnail.to_string(),
+                    width: None,
+                });
+            }
+
+            vec![embed]
         }
         _ => {
             let first_track = tracks.first().unwrap();
@@ -228,13 +291,14 @@ pub(crate) async fn play(
                 "Added {} tracks to the queue:\n",
                 num_tracks_added
             ));
+            let embed = EmbedBuilder::new()
+                .description(content)
+                .color(colors::BLURPLE)
+                .build();
+            vec![embed]
         }
-    }
+    };
 
-    let embeds = vec![EmbedBuilder::new()
-        .description(content)
-        .color(colors::BLURPLE)
-        .build()];
     state
         .http
         .interaction(interaction.application_id)
