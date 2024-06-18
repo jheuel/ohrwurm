@@ -1,5 +1,5 @@
 use crate::metadata::MetadataMap;
-use crate::state::{Settings, State, StateRef};
+use crate::state::{State, StateRef};
 use async_trait::async_trait;
 use songbird::{Event, EventContext, EventHandler, TrackEvent};
 use std::ops::Sub;
@@ -29,14 +29,8 @@ pub(crate) async fn loop_queue(
         return Ok(());
     };
 
-    state
-        .guild_settings
-        .entry(guild_id)
-        .or_insert_with(|| Settings { loop_queue: false });
-
     state.guild_settings.entry(guild_id).and_modify(|settings| {
         settings.loop_queue = !settings.loop_queue;
-        println!("loop_queue: {}", settings.loop_queue);
     });
 
     let looping = state

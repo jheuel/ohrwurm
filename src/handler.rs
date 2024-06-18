@@ -1,5 +1,7 @@
 use crate::commands::queue::{build_action_row, build_queue_embeds, TRACKS_PER_PAGE};
-use crate::commands::{delete, join, leave, loop_queue, pause, play, queue, resume, skip, stop};
+use crate::commands::{
+    delete, join, leave, leave_channel, loop_queue, pause, play, queue, resume, skip, stop,
+};
 use crate::state::State;
 use futures::Future;
 use std::error::Error;
@@ -63,13 +65,7 @@ pub(crate) async fn leave_if_alone(
 
     // count is 1 if the bot is the only one in the channel
     if count == 1 {
-        // stop playing
-        if let Some(call_lock) = state.songbird.get(guild_id) {
-            let call = call_lock.lock().await;
-            call.queue().stop();
-        }
-        // leave the voice channel
-        state.songbird.leave(guild_id).await?;
+        leave_channel(guild_id, Arc::clone(&state)).await?;
     }
     Ok(())
 }

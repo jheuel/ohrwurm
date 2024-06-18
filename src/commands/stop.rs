@@ -23,6 +23,10 @@ pub(crate) async fn stop(
         return Ok(());
     };
 
+    state.guild_settings.entry(guild_id).and_modify(|settings| {
+        settings.loop_queue = false;
+    });
+
     if let Some(call_lock) = state.songbird.get(guild_id) {
         let call = call_lock.lock().await;
         call.queue().stop();

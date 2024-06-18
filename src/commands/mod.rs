@@ -3,6 +3,7 @@ pub(crate) use join::join;
 
 mod leave;
 pub(crate) use leave::leave;
+pub(crate) use leave::leave_channel;
 
 mod pause;
 pub(crate) use pause::pause;

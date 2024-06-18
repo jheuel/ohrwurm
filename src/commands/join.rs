@@ -38,6 +38,9 @@ pub(crate) async fn join_channel(
         call.deafen(true).await?;
     }
 
+    // create guild config
+    state.guild_settings.entry(guild_id).or_default();
+
     Ok(())
 }
 

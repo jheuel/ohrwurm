@@ -13,6 +13,18 @@ pub(crate) struct Settings {
     pub(crate) loop_queue: bool,
 }
 
+impl Settings {
+    pub(crate) fn new() -> Self {
+        Self { loop_queue: false }
+    }
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct StateRef {
     pub(crate) http: HttpClient,
