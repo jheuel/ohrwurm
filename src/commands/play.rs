@@ -53,6 +53,9 @@ async fn get_tracks(
             if stderr.contains("This video is only available to Music Premium members") {
                 return Err("This video is only available to Music Premium members".into());
             }
+            if stderr.contains("YouTube said: The playlist does not exist.") {
+                return Err("YouTube said: The playlist does not exist.".into());
+            }
         }
         return Err("No tracks found".into());
     }
@@ -272,6 +275,21 @@ mod tests {
                 .unwrap()
                 .to_string()
                 .contains("This video is only available to Music Premium members"));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_playlist_does_not_exist_tracks() {
+        let urls = ["https://www.youtube.com/playlist?list=PLox0oG0uy8Lc1IaIfGyrvtuRItuEyJiyG"];
+        for url in urls.iter() {
+            println!("url: {:?}", url);
+            let tracks = get_tracks(url.to_string()).await;
+            assert!(tracks.is_err());
+            assert!(tracks
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("YouTube said: The playlist does not exist."));
         }
     }
 }
