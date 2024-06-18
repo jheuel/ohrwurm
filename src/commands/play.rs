@@ -47,6 +47,15 @@ async fn get_tracks(
         .map_while(Result::ok)
         .flat_map(|line| serde_json::from_str(&line))
         .collect();
+
+    if tracks.is_empty() {
+        if let Ok(stderr) = String::from_utf8(output.stderr) {
+            if stderr.contains("This video is only available to Music Premium members") {
+                return Err("This video is only available to Music Premium members".into());
+            }
+        }
+        return Err("No tracks found".into());
+    }
     tracing::debug!("tracks: {:?}", tracks);
     Ok(tracks)
 }
@@ -99,7 +108,23 @@ pub(crate) async fn play(
 
     debug!("query: {:?}", query);
 
-    let tracks = get_tracks(query).await?;
+    let tracks = match get_tracks(query).await {
+        Err(e) => {
+            let content = format!("{}", e);
+            let embeds = vec![EmbedBuilder::new()
+                .description(content)
+                .color(colors::RED)
+                .build()];
+            state
+                .http
+                .interaction(interaction.application_id)
+                .update_response(&interaction.token)
+                .embeds(Some(&embeds))?
+                .await?;
+            return Ok(());
+        }
+        Ok(tracks) => tracks,
+    };
 
     if tracks.len() > 1 {
         let first_track = tracks.first().unwrap();
@@ -140,11 +165,6 @@ pub(crate) async fn play(
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
         let src_copy = src.clone();
         let track: Track = src_copy.into();
-        //state
-        //    .tracks
-        //    .entry(guild_id)
-        //    .or_default()
-        //    .insert(track.uuid, src);
 
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
@@ -237,6 +257,21 @@ mod tests {
             println!("url: {:?}", url);
             let tracks = get_tracks(url.to_string()).await.unwrap();
             assert!(!tracks.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_premium_tracks() {
+        let urls = ["https://www.youtube.com/watch?v=QgMZRmxQ0Dc"];
+        for url in urls.iter() {
+            println!("url: {:?}", url);
+            let tracks = get_tracks(url.to_string()).await;
+            assert!(tracks.is_err());
+            assert!(tracks
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("This video is only available to Music Premium members"));
         }
     }
 }
