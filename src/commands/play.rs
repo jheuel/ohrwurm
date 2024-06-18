@@ -176,10 +176,10 @@ pub(crate) async fn play(
     for yttrack in &tracks {
         tracing::debug!("track: {:?}", yttrack);
         let url = yttrack
-            .url
+            .original_url
             .clone()
-            .or(yttrack.original_url.clone())
-            .ok_or("")?;
+            .or(yttrack.url.clone())
+            .ok_or("Could not find url")?;
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
         let src_copy = src.clone();
         let track: Track = src_copy.into();
