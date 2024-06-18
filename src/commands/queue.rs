@@ -59,9 +59,9 @@ pub(crate) async fn build_queue_embeds(queue: &[TrackHandle], page: usize) -> Ve
     }
     message.push('\n');
 
-    let max_pages = queue.len() / TRACKS_PER_PAGE;
-    if max_pages > 0 {
-        message.push_str(&format!("page {}/{}", 1 + page, 1 + max_pages));
+    let n_pages = (queue.len() + TRACKS_PER_PAGE - 1) / TRACKS_PER_PAGE;
+    if n_pages > 1 {
+        message.push_str(&format!("page {}/{}", 1 + page, n_pages));
     }
     vec![EmbedBuilder::new()
         .description(&message)
@@ -69,7 +69,7 @@ pub(crate) async fn build_queue_embeds(queue: &[TrackHandle], page: usize) -> Ve
         .build()]
 }
 
-pub(crate) fn build_action_row(page: usize, max_pages: usize) -> Vec<Component> {
+pub(crate) fn build_action_row(page: usize, n_pages: usize) -> Vec<Component> {
     vec![Component::ActionRow(ActionRow {
         components: vec![
             Component::Button(Button {
@@ -100,7 +100,7 @@ pub(crate) fn build_action_row(page: usize, max_pages: usize) -> Vec<Component> 
                     name: "➡️".to_string(),
                 }),
                 url: None,
-                disabled: page >= max_pages,
+                disabled: page >= n_pages - 1,
             }),
         ],
     })]
@@ -146,7 +146,8 @@ pub(crate) async fn queue(
     }
 
     let embeds = build_queue_embeds(&queue, 0).await;
-    let action_row = build_action_row(0, queue.len() / TRACKS_PER_PAGE);
+    let n_pages = (queue.len() + TRACKS_PER_PAGE - 1) / TRACKS_PER_PAGE;
+    let action_row = build_action_row(0, n_pages);
 
     state
         .http
