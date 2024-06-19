@@ -2,9 +2,11 @@ mod handler;
 use handler::Handler;
 mod colors;
 mod commands;
+mod interaction_commands;
 mod metadata;
 mod signal;
 mod state;
+mod utils;
 
 use crate::commands::get_chat_commands;
 use dotenv::dotenv;
