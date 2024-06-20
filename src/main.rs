@@ -1,7 +1,9 @@
 mod handler;
 use handler::Handler;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 mod colors;
 mod commands;
+mod db;
 mod interaction_commands;
 mod metadata;
 mod signal;
@@ -38,6 +40,16 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     info!("Starting up...");
 
     let (mut shards, state) = {
+        let db = env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set")?;
+        let options = SqliteConnectOptions::new()
+            .create_if_missing(true)
+            .filename(&db);
+        let pool = SqlitePoolOptions::new()
+            .max_connections(5)
+            .connect_with(options)
+            .await?;
+        sqlx::migrate!().run(&pool).await?;
+
         let token = env::var("DISCORD_TOKEN").map_err(|_| "DISCORD_TOKEN is not set")?;
         let app_id = env::var("DISCORD_APP_ID")
             .map_err(|_| "DISCORD_APP_ID is not set")?
@@ -80,6 +92,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 songbird,
                 standby: Standby::new(),
                 guild_settings: Default::default(),
+                pool,
             }),
         )
     };

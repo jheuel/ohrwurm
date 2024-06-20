@@ -9,6 +9,7 @@ license = "MIT"
 symphonia = { version = "0.5.2", features=["all"] }
 songbird = { version = "0.4.0", features = ["driver", "gateway", "twilight", "rustls", "builtin-queue"] }
 tokio = { features = ["macros", "rt-multi-thread", "signal", "sync"], version = "1" }
+sqlx = { version = "0.7", features = [ "runtime-tokio", "sqlite", "chrono", "migrate"] }
 regex = { version = "1", features = ["unicode-case"] }
 futures = "0.3"
 reqwest = "0.11"
@@ -28,3 +29,4 @@ anyhow = "1.0.86"
 dashmap = "5.5.3"
 async-trait = "0.1.80"
 uuid = "1.8.0"
+chrono = "0.4.38"

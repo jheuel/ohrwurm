@@ -1,7 +1,7 @@
-use crate::colors;
 use crate::commands::join::join_channel;
 use crate::metadata::{Metadata, MetadataMap};
 use crate::state::State;
+use crate::{colors, db};
 
 use serde::{Deserialize, Serialize};
 use songbird::input::{Compose, YoutubeDl};
@@ -180,12 +180,51 @@ pub(crate) async fn play(
             .clone()
             .or(yttrack.url.clone())
             .ok_or("Could not find url")?;
+
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
         let src_copy = src.clone();
         let track: Track = src_copy.into();
 
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
+
+            let (author_name, author_global_name) = if let Some(author) = interaction.author() {
+                (author.name.clone(), author.global_name.clone())
+            } else {
+                ("".to_string(), None)
+            };
+
+            db::track::insert_guild(&state.pool, db::track::Guild::new(guild_id.to_string()))
+                .await
+                .expect("failed to insert guild: {e}");
+
+            db::track::insert_user(
+                &state.pool,
+                db::track::User::new(user_id.to_string(), author_name, author_global_name),
+            )
+            .await
+            .expect("failed to insert user: {e}");
+
+            let track_id = db::track::insert_track(
+                &state.pool,
+                db::track::Track::new(
+                    url.clone(),
+                    yttrack.title.clone(),
+                    yttrack.channel.clone(),
+                    yttrack.duration_string.clone(),
+                    metadata.thumbnail.clone().unwrap_or_default(),
+                ),
+            )
+            .await
+            .expect("failed to insert track: {e}");
+
+            db::track::insert_query(
+                &state.pool,
+                db::track::Query::new(user_id.to_string(), guild_id.to_string(), track_id),
+            )
+            .await
+            .expect("failed to insert track: {e}");
+
             tracks_added.push(TrackType {
                 url: url.clone(),
                 title: metadata.title.clone(),

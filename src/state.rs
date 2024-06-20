@@ -32,4 +32,5 @@ pub(crate) struct StateRef {
     pub(crate) songbird: Songbird,
     pub(crate) standby: Standby,
     pub(crate) guild_settings: DashMap<Id<GuildMarker>, Settings>,
+    pub(crate) pool: sqlx::SqlitePool,
 }

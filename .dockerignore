@@ -12,3 +12,6 @@ README.md
 # Cargo files
 **/*.rs.bk
 /target/
+
+# Database files
+data
