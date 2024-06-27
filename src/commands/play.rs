@@ -4,6 +4,7 @@ use crate::state::State;
 use crate::{colors, db};
 
 use serde::{Deserialize, Serialize};
+use songbird::input::cached::Memory;
 use songbird::input::{Compose, YoutubeDl};
 use songbird::tracks::Track;
 use std::io::{BufRead, BufReader};
@@ -183,6 +184,8 @@ pub(crate) async fn play(
 
         let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
         let src_copy = src.clone();
+        let src_copy2 = src.clone();
+        let _m = Memory::new(src_copy2.into());
         let track: Track = src_copy.into();
 
         if let Ok(metadata) = src.aux_metadata().await {
