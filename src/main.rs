@@ -16,7 +16,7 @@ use futures::StreamExt;
 use signal::signal_handler;
 use songbird::{shards::TwilightMap, Songbird};
 use state::StateRef;
-use std::{env, error::Error, sync::Arc};
+use std::{env, error::Error, str::FromStr, sync::Arc};
 use tokio::select;
 use tracing::{debug, info};
 use twilight_cache_inmemory::InMemoryCache;
@@ -34,16 +34,15 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     println!("Starting up...");
 
-    // Initialize the tracing subscriber.
     tracing_subscriber::fmt::init();
 
     info!("Starting up...");
 
     let (mut shards, state) = {
         let db = env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set")?;
-        let options = SqliteConnectOptions::new()
-            .create_if_missing(true)
-            .filename(&db);
+        let options = SqliteConnectOptions::from_str(&db)
+            .expect("could not create options")
+            .create_if_missing(true);
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect_with(options)

@@ -36,10 +36,19 @@ pub(crate) async fn insert_track(
     pool: &sqlx::SqlitePool,
     track: Track,
 ) -> Result<i64, sqlx::Error> {
-    let query =
-        "INSERT OR REPLACE INTO tracks (url, title, channel, duration, thumbnail, updated) VALUES ($1, $2, $3, $4, $5, $6)";
+    let query = r#"
+        INSERT INTO tracks (url, title, channel, duration, thumbnail, updated)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (url) DO UPDATE SET
+            title = excluded.title,
+            channel = excluded.channel,
+            duration = excluded.duration,
+            thumbnail = excluded.thumbnail,
+            updated = excluded.updated
+        "#;
+
     let res = sqlx::query(query)
-        .bind(track.url)
+        .bind(&track.url)
         .bind(track.title)
         .bind(track.channel)
         .bind(track.duration)
@@ -47,7 +56,23 @@ pub(crate) async fn insert_track(
         .bind(track.updated)
         .execute(pool)
         .await?;
-    Ok(res.last_insert_rowid())
+
+    let id = res.last_insert_rowid();
+
+    // the track id is 0 if we only updated a row
+    if id == 0 {
+        let track: Track = sqlx::query_as(
+            r#"
+            SELECT id FROM tracks
+            WHERE url = $1
+            "#,
+        )
+        .bind(track.url)
+        .fetch_one(pool)
+        .await?;
+        return Ok(track.id);
+    }
+    Ok(id)
 }
 
 #[derive(Debug, FromRow)]
@@ -70,8 +95,14 @@ impl User {
 }
 
 pub(crate) async fn insert_user(pool: &sqlx::SqlitePool, user: User) -> Result<(), sqlx::Error> {
-    let query =
-        "INSERT OR REPLACE INTO users (id, name, global_name, updated) VALUES ($1, $2, $3, $4)";
+    let query = r#"
+        INSERT INTO users (id, name, global_name, updated)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (id) DO UPDATE SET
+            name = excluded.name,
+            global_name = excluded.global_name,
+            updated = excluded.updated
+        "#;
     sqlx::query(query)
         .bind(user.id)
         .bind(user.name)
@@ -105,8 +136,10 @@ impl Query {
 }
 
 pub(crate) async fn insert_query(pool: &sqlx::SqlitePool, q: Query) -> Result<i64, sqlx::Error> {
-    let query =
-        "INSERT OR REPLACE INTO queries (user_id, guild_id, track_id, updated) VALUES ($1, $2, $3, $4)";
+    let query = r#"
+        INSERT INTO queries (user_id, guild_id, track_id, updated)
+        VALUES ($1, $2, $3, $4)
+        "#;
     let res = sqlx::query(query)
         .bind(q.user_id)
         .bind(q.guild_id)
@@ -132,15 +165,17 @@ impl Guild {
     }
 }
 
-pub(crate) async fn insert_guild(
-    pool: &sqlx::SqlitePool,
-    guild: Guild,
-) -> Result<i64, sqlx::Error> {
-    let query = "INSERT OR REPLACE INTO guilds (id, updated) VALUES ($1, $2)";
-    let res = sqlx::query(query)
+pub(crate) async fn insert_guild(pool: &sqlx::SqlitePool, guild: Guild) -> Result<(), sqlx::Error> {
+    let query = r#"
+        INSERT INTO guilds (id, updated)
+        VALUES ($1, $2)
+        ON CONFLICT (id) DO UPDATE SET
+            updated = excluded.updated
+        "#;
+    sqlx::query(query)
         .bind(guild.id)
         .bind(guild.updated)
         .execute(pool)
         .await?;
-    Ok(res.last_insert_rowid())
+    Ok(())
 }
