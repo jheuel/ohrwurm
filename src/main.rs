@@ -16,7 +16,7 @@ use futures::StreamExt;
 use signal::signal_handler;
 use songbird::{shards::TwilightMap, Songbird};
 use state::StateRef;
-use std::{env, error::Error, str::FromStr, sync::Arc};
+use std::{env, error::Error, str::FromStr, sync::Arc, time::Duration};
 use tokio::select;
 use tracing::{debug, info};
 use twilight_cache_inmemory::InMemoryCache;
@@ -82,6 +82,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
         );
         let songbird = Songbird::twilight(Arc::new(senders), user_id);
         let cache = InMemoryCache::new();
+        let client = reqwest::ClientBuilder::new()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(3600))
+            .build()
+            .expect("could not build http client");
 
         (
             shards,
@@ -92,6 +97,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
                 standby: Standby::new(),
                 guild_settings: Default::default(),
                 pool,
+                client,
             }),
         )
     };

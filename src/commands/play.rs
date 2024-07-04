@@ -341,13 +341,17 @@ pub(crate) async fn play(
             .or(yttrack.url.clone())
             .ok_or("Could not find url")?;
 
-        let mut src = YoutubeDl::new(reqwest::Client::new(), url.clone());
+        let mut src = YoutubeDl::new(state.client.clone(), url.clone());
         let track: Track = src.clone().into();
 
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
 
-            persistence(&interaction, yttrack, Arc::clone(&state)).await?;
+            persistence(&interaction, yttrack, Arc::clone(&state))
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("could not persist track: {:?}", e);
+                });
 
             tracks_added.push(TrackType {
                 url: url.clone(),

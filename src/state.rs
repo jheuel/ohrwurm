@@ -33,4 +33,5 @@ pub(crate) struct StateRef {
     pub(crate) standby: Standby,
     pub(crate) guild_settings: DashMap<Id<GuildMarker>, Settings>,
     pub(crate) pool: sqlx::SqlitePool,
+    pub(crate) client: reqwest::Client,
 }
