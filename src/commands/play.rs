@@ -239,6 +239,31 @@ pub(crate) async fn play(
     state: State,
     query: String,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    match play_inner(&interaction, Arc::clone(&state), query).await {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            tracing::debug!("Search did not result in any tracks: {}", e);
+            let content = "Search did not result in any tracks.".to_string();
+            let embeds = vec![EmbedBuilder::new()
+                .description(content)
+                .color(colors::RED)
+                .build()];
+            state
+                .http
+                .interaction(interaction.application_id)
+                .update_response(&interaction.token)
+                .embeds(Some(&embeds))?
+                .await?;
+            Ok(())
+        }
+    }
+}
+
+pub(crate) async fn play_inner(
+    interaction: &InteractionCreate,
+    state: State,
+    query: String,
+) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     debug!(
         "play command in channel {:?} by {:?}",
         interaction.channel,
@@ -282,23 +307,7 @@ pub(crate) async fn play(
 
     debug!("query: {:?}", query);
 
-    let tracks = match get_tracks(query).await {
-        Err(e) => {
-            let content = format!("{}", e);
-            let embeds = vec![EmbedBuilder::new()
-                .description(content)
-                .color(colors::RED)
-                .build()];
-            state
-                .http
-                .interaction(interaction.application_id)
-                .update_response(&interaction.token)
-                .embeds(Some(&embeds))?
-                .await?;
-            return Ok(());
-        }
-        Ok(tracks) => tracks,
-    };
+    let tracks = get_tracks(query).await?;
 
     if tracks.len() > 1 {
         let first_track = tracks.first().unwrap();
@@ -347,7 +356,7 @@ pub(crate) async fn play(
         if let Ok(metadata) = src.aux_metadata().await {
             debug!("metadata: {:?}", metadata);
 
-            persistence(&interaction, yttrack, Arc::clone(&state))
+            persistence(interaction, yttrack, Arc::clone(&state))
                 .await
                 .unwrap_or_else(|e| {
                     tracing::error!("could not persist track: {:?}", e);
