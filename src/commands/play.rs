@@ -25,6 +25,7 @@ use twilight_util::builder::embed::EmbedBuilder;
 use twilight_util::builder::InteractionResponseDataBuilder;
 use url::Url;
 
+#[derive(Debug)]
 struct TrackType {
     url: String,
     title: Option<String>,
@@ -245,6 +246,7 @@ pub(crate) async fn play(
         Err(e) => {
             tracing::debug!("Search did not result in any tracks: {}", e);
             let content = "Search did not result in any tracks.".to_string();
+
             let embeds = vec![EmbedBuilder::new()
                 .description(content)
                 .color(colors::RED)
@@ -334,12 +336,13 @@ pub(crate) async fn play_inner(
             .interaction(interaction.application_id)
             .update_response(&interaction.token)
             .embeds(Some(&embeds))?
-            .await?;
+            .await
+            .context("Could not send playlist loading message")?;
     }
 
     if let Some(call_lock) = state.songbird.get(guild_id) {
         let call = call_lock.lock().await;
-        call.queue().resume()?;
+        call.queue().resume().context("Could not resume playing")?;
     }
 
     let mut tracks_added = vec![];
@@ -349,58 +352,84 @@ pub(crate) async fn play_inner(
             .original_url
             .clone()
             .or(yttrack.url.clone())
-            .ok_or("Could not find url")?;
+            .context("Could not find url")?;
 
         let mut src = YoutubeDl::new(state.client.clone(), url.clone());
         let track: Track = src.clone().into();
 
-        if let Ok(metadata) = src.aux_metadata().await {
-            debug!("metadata: {:?}", metadata);
+        match src.aux_metadata().await {
+            Ok(metadata) => {
+                debug!("metadata: {:?}", metadata);
 
-            persistence(interaction, yttrack, Arc::clone(&state))
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("could not persist track: {:?}", e);
+                persistence(interaction, yttrack, Arc::clone(&state))
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::error!("could not persist track: {:?}", e);
+                    });
+
+                tracks_added.push(TrackType {
+                    url: url.clone(),
+                    title: metadata.title.clone(),
+                    duration_string: yttrack.duration_string.clone(),
+                    channel: yttrack.channel.clone(),
+                    thumbnail: metadata.thumbnail.clone(),
                 });
 
-            tracks_added.push(TrackType {
-                url: url.clone(),
-                title: metadata.title.clone(),
-                duration_string: yttrack.duration_string.clone(),
-                channel: yttrack.channel.clone(),
-                thumbnail: metadata.thumbnail.clone(),
-            });
-
-            if let Some(call_lock) = state.songbird.get(guild_id) {
-                let mut call = call_lock.lock().await;
-                let handle = call.enqueue_with_preload(
-                    track,
-                    metadata.duration.map(|duration| -> Duration {
-                        if duration.as_secs() > 5 {
-                            duration.sub(Duration::from_secs(5))
-                        } else {
-                            duration
-                        }
-                    }),
-                );
-                let mut x = handle.typemap().write().await;
-                x.insert::<MetadataMap>(Metadata {
-                    title: metadata.title,
-                    duration: metadata.duration,
-                    url,
-                    src,
-                });
+                match state.songbird.get(guild_id) {
+                    Some(call_lock) => {
+                        let mut call = call_lock.lock().await;
+                        let handle = call.enqueue_with_preload(
+                            track,
+                            metadata.duration.map(|duration| -> Duration {
+                                if duration.as_secs() > 5 {
+                                    duration.sub(Duration::from_secs(5))
+                                } else {
+                                    duration
+                                }
+                            }),
+                        );
+                        let mut x = handle.typemap().write().await;
+                        x.insert::<MetadataMap>(Metadata {
+                            title: metadata.title,
+                            duration: metadata.duration,
+                            url,
+                            src,
+                        });
+                    }
+                    None => tracing::error!("could not get call lock"),
+                }
+            }
+            Err(e) => {
+                tracing::error!("could not get metadata: {:?}", e);
+                if e.to_string()
+                    .contains("Sign in to confirm you’re not a bot.")
+                {
+                    let content =
+                        "I seem to have been flagged by YouTube as a bot. :-(".to_string();
+                    let embeds = vec![EmbedBuilder::new()
+                        .description(content)
+                        .color(colors::RED)
+                        .build()];
+                    state
+                        .http
+                        .interaction(interaction.application_id)
+                        .update_response(&interaction.token)
+                        .embeds(Some(&embeds))?
+                        .await?;
+                    return Ok(());
+                }
             }
         }
     }
-    let embeds = build_embeds(&tracks, &tracks_added);
 
+    let embeds = build_embeds(&tracks, &tracks_added);
     state
         .http
         .interaction(interaction.application_id)
         .update_response(&interaction.token)
         .embeds(Some(&embeds))?
-        .await?;
+        .await
+        .context("Could not send final play message")?;
 
     Ok(())
 }

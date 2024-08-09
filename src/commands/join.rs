@@ -1,4 +1,5 @@
 use crate::state::State;
+use anyhow::Context;
 use std::error::Error;
 use tracing::debug;
 use twilight_model::{
@@ -22,7 +23,7 @@ pub(crate) async fn join_channel(
     let channel_id = state
         .cache
         .voice_state(user_id, guild_id)
-        .ok_or("Cannot get voice state for user")?
+        .context("Could not get voice state for user")?
         .channel_id();
 
     // join the voice channel
@@ -30,12 +31,12 @@ pub(crate) async fn join_channel(
         .songbird
         .join(guild_id.cast(), channel_id)
         .await
-        .map_err(|e| format!("Could not join voice channel: {:?}", e))?;
+        .context("Could not join voice channel")?;
 
     // signal that we are not listening
     if let Some(call_lock) = state.songbird.get(guild_id.cast()) {
         let mut call = call_lock.lock().await;
-        call.deafen(true).await?;
+        call.deafen(true).await.context("Could not deafen")?;
     }
 
     // create guild config
