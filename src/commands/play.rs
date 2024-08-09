@@ -103,14 +103,14 @@ async fn persistence(
 
     db::track::insert_guild(&state.pool, db::track::Guild::new(guild_id.to_string()))
         .await
-        .expect("failed to insert guild: {e}");
+        .context("failed to insert guild")?;
 
     db::track::insert_user(
         &state.pool,
         db::track::User::new(user_id.to_string(), author_name, author_global_name),
     )
     .await
-    .expect("failed to insert user: {e}");
+    .context("failed to insert user")?;
 
     let track_id = db::track::insert_track(
         &state.pool,
@@ -123,13 +123,14 @@ async fn persistence(
         ),
     )
     .await
-    .context("failed to insert track: {e}")?;
+    .context("failed to insert track")?;
+
     db::track::insert_query(
         &state.pool,
         db::track::Query::new(user_id.to_string(), guild_id.to_string(), track_id),
     )
     .await
-    .context("failed to insert track: {e}")?;
+    .context("failed to insert query")?;
     Ok(())
 }
 
