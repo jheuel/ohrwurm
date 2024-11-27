@@ -1,0 +1,9 @@
+services:
+  ohrwurm:
+    container_name: ohrwurm
+    image: jheuel/ohrwurm:latest
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
