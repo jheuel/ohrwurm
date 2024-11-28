@@ -59,7 +59,7 @@ pub(crate) async fn build_queue_embeds(queue: &[TrackHandle], page: usize) -> Ve
     }
     message.push('\n');
 
-    let n_pages = (queue.len() + TRACKS_PER_PAGE - 1) / TRACKS_PER_PAGE;
+    let n_pages = queue.len().div_ceil(TRACKS_PER_PAGE);
     if n_pages > 1 {
         message.push_str(&format!("page {}/{}", 1 + page, n_pages));
     }
@@ -146,7 +146,7 @@ pub(crate) async fn queue(
     }
 
     let embeds = build_queue_embeds(&queue, 0).await;
-    let n_pages = (queue.len() + TRACKS_PER_PAGE - 1) / TRACKS_PER_PAGE;
+    let n_pages = queue.len().div_ceil(TRACKS_PER_PAGE);
     let action_row = build_action_row(0, n_pages);
 
     state

@@ -112,7 +112,7 @@ impl Handler {
                 let call = call_lock.lock().await;
                 queue = call.queue().current_queue();
             }
-            let n_pages = (queue.len() + TRACKS_PER_PAGE - 1) / TRACKS_PER_PAGE;
+            let n_pages = queue.len().div_ceil(TRACKS_PER_PAGE);
             let page = page.min(n_pages - 1).max(0);
             let embeds = build_queue_embeds(&queue, page).await;
             let action_row = build_action_row(page, n_pages);
