@@ -2,6 +2,7 @@ services:
   ohrwurm:
     container_name: ohrwurm
     image: jheuel/ohrwurm:latest
+    # build: .
     restart: unless-stopped
     volumes:
       - ./data:/data

@@ -58,12 +58,18 @@ async fn get_tracks(
         .output()
         .await?;
 
+    tracing::info!(
+        "yt-dlp output: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
     let reader = BufReader::new(output.stdout.as_slice());
     let tracks: Vec<YouTubeTrack> = reader
         .lines()
         .map_while(Result::ok)
         .flat_map(|line| serde_json::from_str(&line))
         .collect();
+    tracing::info!("yt-dlp tracks: {:?}", tracks);
 
     if tracks.is_empty() {
         if let Ok(stderr) = String::from_utf8(output.stderr) {
@@ -76,7 +82,7 @@ async fn get_tracks(
         }
         return Err("No tracks found".into());
     }
-    tracing::debug!("tracks: {:?}", tracks);
+    tracing::info!("tracks: {:?}", tracks);
     Ok(tracks)
 }
 
@@ -241,6 +247,11 @@ pub(crate) async fn play(
     state: State,
     query: String,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+    tracing::info!(
+        "play command in channel {:?} by {:?}",
+        interaction.channel,
+        interaction.author(),
+    );
     match play_inner(&interaction, Arc::clone(&state), query).await {
         Ok(_) => Ok(()),
         Err(e) => {
@@ -267,13 +278,14 @@ pub(crate) async fn play_inner(
     state: State,
     query: String,
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    debug!(
-        "play command in channel {:?} by {:?}",
+    tracing::info!(
+        "play_inner in channel {:?} by {:?}",
         interaction.channel,
         interaction.author(),
     );
 
     let content = format!("Adding track(s) to the queue: {}", query);
+    tracing::info!("content: {:?}", content);
     let embeds = vec![EmbedBuilder::new()
         .description(content)
         .color(colors::YELLOW)
@@ -308,9 +320,10 @@ pub(crate) async fn play_inner(
         query
     };
 
-    debug!("query: {:?}", query);
+    tracing::info!("query: {:?}", query);
 
     let tracks = get_tracks(query).await?;
+    tracing::info!("got tracks: {:?}", tracks);
 
     if tracks.len() > 1 {
         let first_track = tracks.first().unwrap();

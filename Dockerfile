@@ -20,7 +20,7 @@ RUN cargo build --release --locked
 # Release image
 FROM debian:bullseye-slim
 
-RUN apt-get update && apt-get install -y python3-pip ffmpeg
+RUN apt-get update && apt-get install -y python3-pip
 RUN pip install -U yt-dlp
 
 COPY --from=build /app/target/release/ohrwurm .
