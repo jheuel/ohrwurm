@@ -1,7 +1,7 @@
 services:
   ohrwurm:
     container_name: ohrwurm
-    image: jheuel/ohrwurm:latest
+    image: jheuel/ohrwurm:latest@sha256:650802f854652ecd0dff5882b021041e26f76306d433d63346638df6840f889d
     # build: .
     restart: unless-stopped
     volumes:
