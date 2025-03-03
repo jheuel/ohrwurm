@@ -1,5 +1,5 @@
 # Build image
-FROM rust:slim-bullseye as build
+FROM rust:slim-bullseye@sha256:ce0556529a215addecb21bae87ff0e7eae3a1a0b1d87dcfb2a66e0b8257621dc as build
 
 RUN apt-get update && apt-get install -y \
     build-essential autoconf automake cmake libtool libssl-dev pkg-config
@@ -18,7 +18,7 @@ RUN touch src/main.rs
 RUN cargo build --release --locked
 
 # Release image
-FROM debian:bullseye-slim
+FROM debian:bullseye-slim@sha256:33b7c2e071c29e618182ec872c471f39d2dde3d8904d95f5b7a61acf3a592e7b
 
 RUN apt-get update && apt-get install -y python3-pip
 RUN pip install -U yt-dlp
