@@ -1,0 +1,25 @@
+{
+    "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+    "timezone": "Europe/Berlin",
+    "extends": [
+        "config:recommended",
+        "helpers:pinGitHubActionDigests",
+        ":configMigration",
+        ":pinDevDependencies",
+        ":dependencyDashboard",
+        "docker:pinDigests",
+        "preview:dockerCompose",
+        "preview:dockerVersions"
+    ],
+    "packageRules": [
+        {
+            "matchUpdateTypes": [
+                "minor",
+                "patch",
+                "pin",
+                "digest"
+            ],
+            "automerge": true
+        }
+    ]
+}
