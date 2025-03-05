@@ -1,6 +1,7 @@
 use crate::metadata::Metadata;
 use crate::state::{State, StateRef};
 use async_trait::async_trait;
+use songbird::tracks::Track;
 use songbird::{Event, EventContext, EventHandler, TrackEvent};
 use std::ops::Sub;
 use std::time::Duration;
@@ -101,8 +102,9 @@ impl EventHandler for TrackEndNotifier {
             // get metadata from finished track
             let old_metadata = track_handle.data::<Metadata>();
             // enqueue track
-            let handle = call.enqueue_with_preload(
-                old_metadata.src.clone().into(),
+            let track = Track::new_with_data(old_metadata.src.clone().into(), old_metadata.clone());
+            let _handle = call.enqueue_with_preload(
+                track,
                 old_metadata.duration.map(|duration| -> Duration {
                     if duration.as_secs() > 5 {
                         duration.sub(Duration::from_secs(5))
@@ -111,10 +113,6 @@ impl EventHandler for TrackEndNotifier {
                     }
                 }),
             );
-
-            // insert metadata into new track
-            let mut _new_metadata = handle.data::<Metadata>();
-            _new_metadata = old_metadata.clone();
         }
         None
     }

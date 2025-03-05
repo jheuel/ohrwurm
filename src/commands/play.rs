@@ -368,11 +368,20 @@ pub(crate) async fn play_inner(
             .context("Could not find url")?;
 
         let mut src = YoutubeDl::new(state.client.clone(), url.clone());
-        let track: Track = src.clone().into();
 
         match src.aux_metadata().await {
             Ok(metadata) => {
                 debug!("metadata: {:?}", metadata);
+
+                let track: Track = Track::new_with_data(
+                    src.clone().into(),
+                    Arc::new(Metadata {
+                        title: metadata.title.clone(),
+                        duration: metadata.duration,
+                        url: url.clone(),
+                        src,
+                    }),
+                );
 
                 persistence(interaction, yttrack, Arc::clone(&state))
                     .await
@@ -391,7 +400,7 @@ pub(crate) async fn play_inner(
                 match state.songbird.get(guild_id) {
                     Some(call_lock) => {
                         let mut call = call_lock.lock().await;
-                        let handle = call.enqueue_with_preload(
+                        let _handle = call.enqueue_with_preload(
                             track,
                             metadata.duration.map(|duration| -> Duration {
                                 if duration.as_secs() > 5 {
@@ -401,13 +410,6 @@ pub(crate) async fn play_inner(
                                 }
                             }),
                         );
-                        let mut _x = handle.data::<Metadata>();
-                        _x = Arc::new(Metadata {
-                            title: metadata.title,
-                            duration: metadata.duration,
-                            url,
-                            src,
-                        });
                     }
                     None => tracing::error!("could not get call lock"),
                 }
