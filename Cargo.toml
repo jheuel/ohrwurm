@@ -14,7 +14,7 @@ regex = { version = "1", features = ["unicode-case"] }
 futures = "0.3"
 reqwest = "0.12"
 tracing = "0.1"
-tracing-subscriber = "0.2"
+tracing-subscriber = "0.3"
 twilight-gateway = "0.16"
 twilight-http = "0.16"
 twilight-model = "0.16"
