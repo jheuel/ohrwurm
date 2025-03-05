@@ -12,18 +12,12 @@ mod utils;
 
 use crate::commands::get_chat_commands;
 use dotenv::dotenv;
-use futures::StreamExt;
-use signal::signal_handler;
 use songbird::{shards::TwilightMap, Songbird};
 use state::StateRef;
 use std::{env, error::Error, str::FromStr, sync::Arc, time::Duration};
-use tokio::select;
 use tracing::{debug, info};
 use twilight_cache_inmemory::InMemoryCache;
-use twilight_gateway::{
-    stream::{self, ShardEventStream},
-    Intents, Shard,
-};
+use twilight_gateway::{Event, EventTypeFlags, Intents, Shard, StreamExt as _};
 use twilight_http::Client as HttpClient;
 use twilight_model::id::Id;
 use twilight_standby::Standby;
@@ -38,7 +32,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
 
     info!("Starting up...");
 
-    let (mut shards, state) = {
+    let (shards, state) = {
         let db = env::var("DATABASE_URL").map_err(|_| "DATABASE_URL is not set")?;
         let options = SqliteConnectOptions::from_str(&db)
             .expect("could not create options")
@@ -71,7 +65,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
             | Intents::MESSAGE_CONTENT;
         let config = twilight_gateway::Config::new(token.clone(), intents);
         let shards: Vec<Shard> =
-            stream::create_recommended(&http, config, |_, builder| builder.build())
+            twilight_gateway::create_recommended(&http, config, |_, builder| builder.build())
                 .await?
                 .collect();
         let senders = TwilightMap::new(
@@ -105,45 +99,55 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     info!("Ready to receive events");
 
     let handler = Handler::new(Arc::clone(&state));
-    let mut stop_rx = signal_handler();
-    let mut stream = ShardEventStream::new(shards.iter_mut());
-    loop {
-        select! {
-            biased;
-            _ = stop_rx.changed() => {
-                for guild in state.cache.iter().guilds() {
-                    if let Some(user) = state.cache.current_user() {
-                        if state.cache.voice_state(user.id, guild.id()).is_some() {
-                            debug!("Leaving guild {:?}", guild.id());
-                            state.songbird.leave(guild.id()).await?;
-                        }
-                    }
-                }
-                // need to grab next event to properly leave voice channels
-                stream.next().await;
-                break;
-            },
-            next = stream.next() => {
-                let event = match next {
-                    Some((_, Ok(event))) => event,
-                    Some((_, Err(source))) => {
-                        tracing::warn!(?source, "error receiving event");
-                        if source.is_fatal() {
-                            break;
-                        }
-                        continue;
-                    }
-                    None => break,
-                };
-                debug!("Event: {:?}", &event);
+    // let mut stop_rx = signal_handler();
+    let mut set = tokio::task::JoinSet::new();
 
-                state.cache.update(&event);
-                state.standby.process(&event);
-                state.songbird.process(&event).await;
-
-                handler.act(event).await?;
-            }
-        }
+    for shard in shards {
+        set.spawn(tokio::spawn(runner(shard, handler.clone(), state.clone())));
     }
+    set.join_next().await;
+
+    Ok(())
+}
+
+async fn runner(mut shard: Shard, handler: Handler, state: Arc<StateRef>) {
+    while let Some(item) = shard.next_event(EventTypeFlags::all()).await {
+        let event = match item {
+            Ok(event) => event,
+            Err(source) => {
+                tracing::warn!(?source, "error receiving event");
+
+                continue;
+            }
+        };
+
+        tokio::spawn({
+            let state = state.clone();
+            let handler = handler.clone();
+            async move {
+                handle_event(event, handler, state)
+                    .await
+                    .unwrap_or_else(|source| {
+                        tracing::warn!(?source, "error handling event");
+                    });
+            }
+        });
+    }
+}
+
+async fn handle_event(
+    event: Event,
+    handler: Handler,
+    state: Arc<StateRef>,
+) -> Result<(), Box<dyn Error>> {
+    state.standby.process(&event);
+    state.songbird.process(&event).await;
+    debug!("Event: {:?}", &event);
+
+    state.cache.update(&event);
+    state.standby.process(&event);
+    state.songbird.process(&event).await;
+
+    handler.act(event).await?;
     Ok(())
 }

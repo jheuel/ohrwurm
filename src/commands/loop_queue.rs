@@ -1,4 +1,4 @@
-use crate::metadata::MetadataMap;
+use crate::metadata::Metadata;
 use crate::state::{State, StateRef};
 use async_trait::async_trait;
 use songbird::{Event, EventContext, EventHandler, TrackEvent};
@@ -99,9 +99,7 @@ impl EventHandler for TrackEndNotifier {
             let mut call = call_lock.lock().await;
 
             // get metadata from finished track
-            let old_typemap_lock = track_handle.typemap().read().await;
-            let old_metadata = old_typemap_lock.get::<MetadataMap>().unwrap();
-
+            let old_metadata = track_handle.data::<Metadata>();
             // enqueue track
             let handle = call.enqueue_with_preload(
                 old_metadata.src.clone().into(),
@@ -115,8 +113,8 @@ impl EventHandler for TrackEndNotifier {
             );
 
             // insert metadata into new track
-            let mut new_typemap = handle.typemap().write().await;
-            new_typemap.insert::<MetadataMap>(old_metadata.clone());
+            let mut _new_metadata = handle.data::<Metadata>();
+            _new_metadata = old_metadata.clone();
         }
         None
     }

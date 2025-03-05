@@ -14,6 +14,7 @@ use twilight_model::gateway::payload::incoming::InteractionCreate;
 use twilight_model::http::interaction::{InteractionResponse, InteractionResponseType};
 use twilight_util::builder::InteractionResponseDataBuilder;
 
+#[derive(Debug, Clone)]
 pub(crate) struct Handler {
     state: State,
 }

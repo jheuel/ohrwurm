@@ -26,7 +26,7 @@ pub(crate) async fn delete(
         .http
         .channel_messages(msg.channel_id)
         .before(msg.id)
-        .limit(n)?
+        .limit(n)
         .await?
         .model()
         .await?;

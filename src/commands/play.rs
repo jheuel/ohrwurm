@@ -1,5 +1,5 @@
 use crate::commands::join::join_channel;
-use crate::metadata::{Metadata, MetadataMap};
+use crate::metadata::Metadata;
 use crate::state::State;
 use crate::{colors, db};
 
@@ -266,7 +266,7 @@ pub(crate) async fn play(
                 .http
                 .interaction(interaction.application_id)
                 .update_response(&interaction.token)
-                .embeds(Some(&embeds))?
+                .embeds(Some(&embeds))
                 .await?;
             Ok(())
         }
@@ -348,7 +348,7 @@ pub(crate) async fn play_inner(
             .http
             .interaction(interaction.application_id)
             .update_response(&interaction.token)
-            .embeds(Some(&embeds))?
+            .embeds(Some(&embeds))
             .await
             .context("Could not send playlist loading message")?;
     }
@@ -401,8 +401,8 @@ pub(crate) async fn play_inner(
                                 }
                             }),
                         );
-                        let mut x = handle.typemap().write().await;
-                        x.insert::<MetadataMap>(Metadata {
+                        let mut _x = handle.data::<Metadata>();
+                        _x = Arc::new(Metadata {
                             title: metadata.title,
                             duration: metadata.duration,
                             url,
@@ -427,7 +427,7 @@ pub(crate) async fn play_inner(
                         .http
                         .interaction(interaction.application_id)
                         .update_response(&interaction.token)
-                        .embeds(Some(&embeds))?
+                        .embeds(Some(&embeds))
                         .await?;
                     return Ok(());
                 }
@@ -440,7 +440,7 @@ pub(crate) async fn play_inner(
         .http
         .interaction(interaction.application_id)
         .update_response(&interaction.token)
-        .embeds(Some(&embeds))?
+        .embeds(Some(&embeds))
         .await
         .context("Could not send final play message")?;
 

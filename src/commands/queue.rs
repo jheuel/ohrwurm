@@ -1,6 +1,6 @@
 use songbird::tracks::TrackHandle;
 use twilight_model::channel::message::component::{ActionRow, Button, ButtonStyle};
-use twilight_model::channel::message::{Component, Embed, MessageFlags, ReactionType};
+use twilight_model::channel::message::{Component, Embed, EmojiReactionType, MessageFlags};
 use twilight_model::gateway::payload::incoming::InteractionCreate;
 use twilight_model::http::interaction::InteractionResponse;
 use twilight_model::http::interaction::InteractionResponseType;
@@ -8,7 +8,8 @@ use twilight_util::builder::embed::EmbedBuilder;
 use twilight_util::builder::InteractionResponseDataBuilder;
 
 use crate::colors;
-use crate::{metadata::MetadataMap, state::State};
+use crate::metadata::Metadata;
+use crate::state::State;
 use std::error::Error;
 
 pub(crate) const TRACKS_PER_PAGE: usize = 5;
@@ -38,10 +39,7 @@ pub(crate) async fn build_queue_embeds(queue: &[TrackHandle], page: usize) -> Ve
         .skip(TRACKS_PER_PAGE * page)
         .take(TRACKS_PER_PAGE)
     {
-        let map = track.typemap().read().await;
-        let metadata = map
-            .get::<MetadataMap>()
-            .expect("Could not get metadata map");
+        let metadata = track.data::<Metadata>();
         message.push_str(
             format!(
                 "* [{}]({})",
@@ -76,31 +74,34 @@ pub(crate) fn build_action_row(page: usize, n_pages: usize) -> Vec<Component> {
                 custom_id: Some(format!("page:{}", page as i32 - 1)),
                 style: ButtonStyle::Primary,
                 label: Some("Previous page".to_string()),
-                emoji: Some(ReactionType::Unicode {
+                emoji: Some(EmojiReactionType::Unicode {
                     name: "⬅️".to_string(),
                 }),
                 url: None,
                 disabled: page == 0,
+                sku_id: None,
             }),
             Component::Button(Button {
                 custom_id: Some(format!("page:{}", page)),
                 style: ButtonStyle::Primary,
                 label: Some("Refresh".to_string()),
-                emoji: Some(ReactionType::Unicode {
+                emoji: Some(EmojiReactionType::Unicode {
                     name: "🔄".to_string(),
                 }),
                 url: None,
                 disabled: false,
+                sku_id: None,
             }),
             Component::Button(Button {
                 custom_id: Some(format!("page:{}", page + 1)),
                 style: ButtonStyle::Primary,
                 label: Some("Next page".to_string()),
-                emoji: Some(ReactionType::Unicode {
+                emoji: Some(EmojiReactionType::Unicode {
                     name: "➡️".to_string(),
                 }),
                 url: None,
                 disabled: page >= n_pages - 1,
+                sku_id: None,
             }),
         ],
     })]
@@ -153,8 +154,8 @@ pub(crate) async fn queue(
         .http
         .interaction(interaction.application_id)
         .update_response(&interaction.token)
-        .embeds(Some(&embeds))?
-        .components(Some(&action_row))?
+        .embeds(Some(&embeds))
+        .components(Some(&action_row))
         .await?;
 
     Ok(())
