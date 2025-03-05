@@ -31,3 +31,5 @@ jobs:
             linux/amd64
           push: true
           tags: jheuel/ohrwurm:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
