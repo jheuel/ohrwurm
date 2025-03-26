@@ -40,7 +40,7 @@ jobs:
     - run: sudo apt-get install -y cmake
     - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
       with:
-        python-version: '3.12'
+        python-version: '3.13'
     - name: Install yt-dlp
       run: pip install yt-dlp
     - uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4 # v1
@@ -67,7 +67,7 @@ jobs:
     - run: sudo apt-get install -y cmake
     - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
       with:
-        python-version: '3.12'
+        python-version: '3.13'
     - uses: actions-rust-lang/setup-rust-toolchain@9399c7bb15d4c7d47b27263d024f0a4978346ba4 # v1
       with:
         components: rustfmt
