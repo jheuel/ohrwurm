@@ -47,7 +47,7 @@ struct YouTubeTrack {
 }
 
 fn build_playlist_url(playlist_id: &str) -> String {
-    format!("https://www.youtube.com/playlist?list={}", playlist_id)
+    format!("https://www.youtube.com/playlist?list={playlist_id}")
 }
 
 async fn get_tracks(
@@ -157,11 +157,8 @@ fn build_single_track_added_embeds(tracks_added: &[TrackType]) -> Vec<Embed> {
 
     let footer = match host {
         Some(host) => EmbedFooter {
-            text: format!("Streaming from {}", host),
-            icon_url: Some(format!(
-                "https://www.google.com/s2/favicons?domain={}",
-                host
-            )),
+            text: format!("Streaming from {host}"),
+            icon_url: Some(format!("https://www.google.com/s2/favicons?domain={host}")),
             proxy_icon_url: None,
         },
         None => EmbedFooter {
@@ -222,10 +219,7 @@ fn build_playlist_added_embeds(tracks: &[YouTubeTrack], num_tracks_added: usize)
                 .unwrap_or("Unknown".to_string())
         )
     ));
-    content.push_str(&format!(
-        "Added {} tracks to the queue.\n",
-        num_tracks_added
-    ));
+    content.push_str(&format!("Added {num_tracks_added} tracks to the queue.\n"));
     let embed = EmbedBuilder::new()
         .description(content)
         .color(colors::BLURPLE)
@@ -284,7 +278,7 @@ pub(crate) async fn play_inner(
         interaction.author(),
     );
 
-    let content = format!("Adding track(s) to the queue: {}", query);
+    let content = format!("Adding track(s) to the queue: {query}");
     tracing::info!("content: {:?}", content);
     let embeds = vec![EmbedBuilder::new()
         .description(content)

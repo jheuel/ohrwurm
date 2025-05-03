@@ -23,9 +23,9 @@ fn format_duration(duration: std::time::Duration) -> String {
     let seconds = res;
     let mut s = String::new();
     if hours > 0 {
-        s.push_str(format!("{:02}:", hours).as_str());
+        s.push_str(format!("{hours:02}:").as_str());
     }
-    s.push_str(format!("{:02}:{:02}", minutes, seconds).as_str());
+    s.push_str(format!("{minutes:02}:{seconds:02}").as_str());
     s
 }
 
@@ -82,7 +82,7 @@ pub(crate) fn build_action_row(page: usize, n_pages: usize) -> Vec<Component> {
                 sku_id: None,
             }),
             Component::Button(Button {
-                custom_id: Some(format!("page:{}", page)),
+                custom_id: Some(format!("page:{page}")),
                 style: ButtonStyle::Primary,
                 label: Some("Refresh".to_string()),
                 emoji: Some(EmojiReactionType::Unicode {

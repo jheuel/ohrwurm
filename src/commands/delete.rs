@@ -15,7 +15,7 @@ pub(crate) async fn delete(
     let n = msg
         .content
         .split(' ')
-        .last()
+        .next_back()
         .unwrap_or("1")
         .parse::<u16>()
         .unwrap_or(1);
