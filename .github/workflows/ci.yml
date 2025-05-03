@@ -10,7 +10,7 @@ env:
 
 jobs:
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - run: sudo apt-get update
@@ -22,7 +22,7 @@ jobs:
       uses: actions-rust-lang/rustfmt@559aa3035a47390ba96088dffa783b5d26da9326 # v1
 
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - run: sudo apt-get update
@@ -32,7 +32,7 @@ jobs:
       run: cargo build --verbose
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - run: sudo apt-get update
@@ -47,7 +47,7 @@ jobs:
       run: cargo test --verbose --all-features
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - run: sudo apt-get update
@@ -59,7 +59,7 @@ jobs:
       run: cargo clippy
 
   pre-commit:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - run: sudo apt-get update
