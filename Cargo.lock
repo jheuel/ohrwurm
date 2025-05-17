@@ -511,19 +511,6 @@ dependencies = [
 
 [[package]]
 name = "dashmap"
-version = "5.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
-dependencies = [
- "cfg-if",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
-]
-
-[[package]]
-name = "dashmap"
 version = "6.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5041cc499144891f3790297212f32a74fb938e5136a14943f338ef9e0ae276cf"
@@ -1805,7 +1792,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "dashmap 5.5.3",
+ "dashmap",
  "dotenv",
  "futures",
  "regex",
@@ -3007,7 +2994,7 @@ dependencies = [
  "bytes",
  "chacha20poly1305",
  "crypto-common",
- "dashmap 6.1.0",
+ "dashmap",
  "derivative",
  "discortp",
  "either",
@@ -4066,7 +4053,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc9de5f02fa89a48d3fa989811d67a3f3cc3179a46ce71089afa5412ff21fb41"
 dependencies = [
  "bitflags 2.9.0",
- "dashmap 6.1.0",
+ "dashmap",
  "serde",
  "twilight-model",
 ]
@@ -4155,7 +4142,7 @@ version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "375267fde44a8d52a8bf01c60d0769d9d2a289d056f278da4e99186ae04c5903"
 dependencies = [
- "dashmap 6.1.0",
+ "dashmap",
  "futures-core",
  "tokio",
  "tracing",
