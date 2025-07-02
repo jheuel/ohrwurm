@@ -1,5 +1,5 @@
 # Build image
-FROM rust:slim-bullseye@sha256:c8bfa46d68a20e878e316e8302790d5f8c7410c56e35b562507d50f2bec64dd7 as build
+FROM rust:slim-bullseye@sha256:12d9a0ff4f3c87badbf56a27ffd6c4774ebe1b5fe5c6b7b1a39cfee537fcb62f as build
 
 RUN apt-get update && apt-get install -y \
     build-essential autoconf automake cmake libtool libssl-dev pkg-config
