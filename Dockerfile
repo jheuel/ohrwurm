@@ -18,7 +18,7 @@ RUN touch src/main.rs
 RUN cargo build --release --locked
 
 # Release image
-FROM debian:bullseye-slim@sha256:b5f9bc44bdfbd9d551dfdd432607cbc6bb5d9d6dea726a1191797d7749166973
+FROM debian:bullseye-slim@sha256:52927eff8153b563244f98cdc802ba97918afcdf67f9e4867cbf1f7afb3d147b
 
 RUN apt-get update && apt-get install -y python3-pip
 RUN pip install -U yt-dlp
